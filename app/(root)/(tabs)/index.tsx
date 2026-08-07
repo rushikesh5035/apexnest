@@ -1,3 +1,4 @@
+import BudgetModal from "@/components/common/budget-modal";
 import TransactionRow from "@/components/tabs/home/transaction-row";
 import { getCategoryConfig } from "@/constants/categories";
 import { useAccountsQuery } from "@/hooks/queries/useAccountsQuery";
@@ -257,6 +258,7 @@ export default function HomeScreen() {
             <Feather name="arrow-right" size={16} color="#4A9EFF" />
           </TouchableOpacity>
 
+          {/*  Monthly budget */}
           <TouchableOpacity
             onPress={() => setBudgetModalOpen(true)}
             activeOpacity={0.85}
@@ -271,7 +273,27 @@ export default function HomeScreen() {
 
             {budget ? (
               <>
-                <></>
+                <Text>
+                  {formatPrice(monthExpense, currency)} of{" "}
+                  {formatPrice(budget.amount, currency)} spent
+                </Text>
+                <View className="h-2 rounded-full bg-[#F0EEE7] overflow-hidden">
+                  <View
+                    className="h-2 rounded-full"
+                    style={{
+                      width: `${Math.min(
+                        Math.round((monthExpense / budget.amount) * 100),
+                        100,
+                      )}%`,
+                      backgroundColor:
+                        monthExpense >= budget.amount
+                          ? "#FF6B4A"
+                          : monthExpense >= budget.amount * 0.8
+                            ? "#F7DC6F"
+                            : "#3DDC84",
+                    }}
+                  />
+                </View>
               </>
             ) : (
               <Text className="text-brand-text-secondary text-xs">
@@ -280,7 +302,7 @@ export default function HomeScreen() {
             )}
           </TouchableOpacity>
 
-          {/*  */}
+          {/* Monthly Expense breakdown Chart */}
           {expenseBreakdown.length > 0 && (
             <View className="bg-white rounded-[18px] border border-[#E8E6DF] p-4 mb-[18px]">
               <Text className="text-[#1A1D26] text-sm font-medium mb-3">
@@ -321,6 +343,7 @@ export default function HomeScreen() {
             </View>
           )}
 
+          {/* All the Recent transactions */}
           <View className="flex-row justify-between items-center mb-3">
             <Text className="text-[#1A1D26] text-sm font-medium">
               Recent transactions
@@ -349,7 +372,16 @@ export default function HomeScreen() {
             ))
           )}
         </View>
-      </ScrollView>{" "}
+      </ScrollView>
+
+      {user && (
+        <BudgetModal
+          visible={budgetModalOpen}
+          budget={budget}
+          onClose={() => setBudgetModalOpen(false)}
+          onSaved={() => setBudgetModalOpen(false)}
+        />
+      )}
     </SafeAreaView>
   );
 }
