@@ -1,5 +1,6 @@
-import CurrencyPicker, {
+import {
   ALL_CURRENCIES,
+  CurrencyPicker,
 } from "@/components/onboarding/currency-picker";
 import { useSupabase } from "@/hooks/useSupabase";
 import {
@@ -27,7 +28,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function OnboardingScreen() {
   const { user } = useUser();
-
+  const authSupabase = useSupabase();
   const setCurrency = useUserStore((s) => s.setCurrency);
   const setNeedsOnboarding = useUserStore((s) => s.setNeedsOnboarding);
 
@@ -50,8 +51,6 @@ export default function OnboardingScreen() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const authSupabase = useSupabase();
-
   const handleSave = async ({ startingBalance }: OnboardingFormSchemaType) => {
     const parsed = parseFloat(startingBalance.replace(/,/g, ""));
     setSaving(true);
@@ -67,7 +66,7 @@ export default function OnboardingScreen() {
 
     if (updateError) {
       setSaving(false);
-      setError("Something went wrong. Please try again");
+      setError("Something went wrong. Please try again.");
       return;
     }
 
@@ -91,10 +90,10 @@ export default function OnboardingScreen() {
       user_id: user!.id,
       account_id: defaultAccount.id,
       type: "INCOME",
-      account: parsed,
+      amount: parsed,
       category: "other_income",
       description: "Starting balance",
-      date: new Date().toDateString(),
+      date: new Date().toISOString(),
       input_method: "MANUAL",
     });
 
@@ -109,6 +108,8 @@ export default function OnboardingScreen() {
       .from("accounts")
       .update({ balance: defaultAccount.balance + parsed })
       .eq("id", defaultAccount.id);
+
+    setSaving(false);
 
     if (balanceError) {
       setError("Something went wrong. Please try again.");
@@ -125,25 +126,25 @@ export default function OnboardingScreen() {
     <SafeAreaView className="flex-1 bg-brand-body" edges={["top"]}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        className="flex-1 bg-brand-body"
+        className="flex-1"
       >
-        <View className="flex-1 justify-center px-6 -mt-16">
+        <View className="flex-1 px-6 justify-center -mt-16">
           <Image
             source={require("../../assets/images/apexnest.png")}
-            className="w-36 h-14 mb-10"
+            className="w-32 h-14 mb-10"
             resizeMode="contain"
           />
-          <Text className="text-3xl font-bold text-[#1A1D26] mb-2 leading-tight">
+          <Text className="text-[#1A1D26] text-3xl font-bold mb-2">
             Let&apos;s get you set up
           </Text>
-          <Text className="text-brand-text-muted text-base mb-10">
+          <Text className="text-brand-text-muted text-sm mb-10">
             A couple of quick details to personalise your experience.
           </Text>
 
+          {/* Starting balance */}
           <Text className="text-brand-bg text-xs font-medium mb-1.5">
             Starting balance
           </Text>
-
           <View className="flex-row items-center bg-white border border-[#E8E6DF] rounded-xl px-4 mb-1">
             <Text className="text-brand-text-secondary text-sm mr-2">
               {selectedCurrency.symbol}
@@ -151,22 +152,20 @@ export default function OnboardingScreen() {
             <Controller
               control={control}
               name="startingBalance"
-              render={({ field: { value, onChange } }) => {
-                return (
-                  <TextInput
-                    className="flex-1 py-3.5 mb-1.5 text-sm text-brand-bg"
-                    placeholder="e.g. 50000"
-                    placeholderTextColor={"#8A8D96"}
-                    keyboardType="numeric"
-                    returnKeyType="done"
-                    value={value}
-                    onChangeText={(value) => {
-                      setError("");
-                      onChange(value);
-                    }}
-                  />
-                );
-              }}
+              render={({ field: { value, onChange } }) => (
+                <TextInput
+                  value={value}
+                  onChangeText={(v) => {
+                    setError("");
+                    onChange(v);
+                  }}
+                  placeholder="e.g. 50000"
+                  placeholderTextColor="#8A8D96"
+                  keyboardType="numeric"
+                  returnKeyType="done"
+                  className="flex-1 py-3.5 text-sm text-brand-bg"
+                />
+              )}
             />
           </View>
 
@@ -187,10 +186,10 @@ export default function OnboardingScreen() {
             className="flex-row items-center justify-between bg-white border border-[#E8E6DF] rounded-xl px-4 py-3.5 mb-6"
           >
             <Text className="text-sm text-brand-bg">
-              {selectedCurrency.symbol} {selectedCurrency.code} -{" "}
+              {selectedCurrency.symbol} {selectedCurrency.code} —{" "}
               {selectedCurrency.name}
             </Text>
-            <Feather name="chevron-down" size={16} color={"#8A8D96"} />
+            <Feather name="chevron-down" size={16} color="#8A8D96" />
           </TouchableOpacity>
 
           {error ? (
@@ -200,11 +199,11 @@ export default function OnboardingScreen() {
           <TouchableOpacity
             onPress={handleSubmit(handleSave)}
             disabled={saving}
-            className="bg-brand-bg py-4 rounded-xl items-center"
+            className="bg-brand-bg rounded-xl py-4 items-center"
             activeOpacity={0.85}
           >
             <Text className="text-white text-sm font-semibold">
-              {saving ? "Saving..." : "Get Started"}
+              {saving ? "Saving…" : "Get started"}
             </Text>
           </TouchableOpacity>
         </View>
