@@ -15,11 +15,13 @@ import React, { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Image,
+  RefreshControl,
+  ScrollView,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
-import { RefreshControl, ScrollView } from "react-native-gesture-handler";
+
 import { PieChart } from "react-native-gifted-charts";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -143,7 +145,7 @@ export default function HomeScreen() {
   }, [monthTransactions]);
 
   return (
-    <SafeAreaView>
+    <SafeAreaView className="flex-1 bg-brand-body">
       <ScrollView
         className="flex-1 bg-brand-body"
         showsVerticalScrollIndicator={false}
@@ -156,7 +158,7 @@ export default function HomeScreen() {
           <View className="flex-row justify-between items-center mb-[22px]">
             {/* left side */}
             <Image
-              source={require("../../../assets/images/welth-light.png")}
+              source={require("../../../assets/images/apexnest.png")}
               style={{ width: 80, height: "100%" }}
               resizeMode="contain"
             />
