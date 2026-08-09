@@ -2,6 +2,7 @@ import { AIActionCard } from "@/components/tabs/add-transaction/ai-action-card";
 import { CalendarPicker } from "@/components/tabs/add-transaction/CalendarPicker";
 import { PillGroup } from "@/components/tabs/add-transaction/PillGroup";
 import ReceiptScannerModal from "@/components/tabs/add-transaction/ReceiptScannerModal";
+import VoiceRecorderModal from "@/components/tabs/add-transaction/VoiceRecorderModal";
 import {
   CategoryKey,
   EXPENSE_CATEGORIES,
@@ -186,6 +187,22 @@ export default function AddTransaction() {
       setScanning(false);
     }
   };
+
+  const handleVoiceExtracted = async (result: ExtractedTransaction) => {
+    applyExtraction(result);
+    setVoiceTranscript(result.transcript);
+    setInputMethod("VOICE");
+  };
+
+  useEffect(() => {
+    if (params.action === "scan") {
+      setScannerOpen(true);
+      router.setParams({ action: undefined });
+    } else if (params.action === "voice") {
+      setVoiceModalOpen(true);
+      router.setParams({ action: undefined });
+    }
+  }, [params.action, router]);
 
   return (
     <SafeAreaView className="flex-1 bg-brand-body" edges={["top"]}>
@@ -417,6 +434,12 @@ export default function AddTransaction() {
         visible={scannerOpen}
         onClose={() => setScannerOpen(false)}
         onCaptured={handleReceiptCaptured}
+      />
+
+      <VoiceRecorderModal
+        visible={voiceModalOpen}
+        onClose={() => setVoiceModalOpen(false)}
+        onExtracted={handleVoiceExtracted}
       />
     </SafeAreaView>
   );
