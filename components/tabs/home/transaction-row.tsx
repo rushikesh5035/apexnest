@@ -1,6 +1,7 @@
 import { getCategoryConfig } from "@/constants/categories";
 import { Transaction } from "@/lib/services/transactions";
 import { formatPrice } from "@/lib/utils";
+import { useUserStore } from "@/store/userStore";
 import { Feather } from "@expo/vector-icons";
 import React from "react";
 import { Text, TouchableOpacity, View } from "react-native";
@@ -24,6 +25,7 @@ export default function TransactionRow({
 }) {
   const config = getCategoryConfig(tx.category);
   const isIncome = tx.type === "INCOME";
+  const currency = useUserStore((state) => state.currency);
 
   const row = (
     <View
@@ -73,7 +75,7 @@ export default function TransactionRow({
         }`}
       >
         {isIncome ? "+" : "-"}
-        {formatPrice(tx.amount)}
+        {formatPrice(tx.amount, currency)}
       </Text>
     </View>
   );
