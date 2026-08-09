@@ -158,8 +158,8 @@ export default function HomeScreen() {
           <View className="flex-row justify-between items-center mb-[22px]">
             {/* left side */}
             <Image
-              source={require("../../../assets/images/apexnest.png")}
-              style={{ width: 80, height: "100%" }}
+              source={require("../../../assets/images/apexnest-light.png")}
+              style={{ width: 100, height: "100%" }}
               resizeMode="contain"
             />
 

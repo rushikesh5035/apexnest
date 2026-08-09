@@ -1,5 +1,7 @@
 import {
+  createTransaction,
   deleteTransaction,
+  NewTransaction,
   Transaction,
   TransactionType,
 } from "@/lib/services/transactions";
@@ -24,6 +26,22 @@ export function useDeleteTransaction() {
     onSuccess: (result) => {
       if (result.error) return;
 
+      // invalidate the transactions and accounts query to refetch the updated budget
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
+    },
+  });
+}
+
+export function useCreateTransaction() {
+  const supabase = useSupabase();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload: NewTransaction) =>
+      createTransaction(supabase, payload),
+    onSuccess: (result) => {
+      if (result.error) return;
       // invalidate the transactions and accounts query to refetch the updated budget
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
