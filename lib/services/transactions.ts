@@ -120,7 +120,7 @@ export async function createTransaction(
 
   if (fetchError) return { error: fetchError };
 
-  const delta = payload.type === "INCOME" ? payload.type : -payload.amount;
+  const delta = payload.type === "INCOME" ? payload.amount : -payload.amount;
 
   const { error: balanceError } = await supabase
     .from("accounts")
