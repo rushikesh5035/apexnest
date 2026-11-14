@@ -3,6 +3,20 @@ export const AI_GRADIENT_REVERSE: [string, string] = ["#1D6FAE", "#0E9C79"];
 export const RECORDING_GRADIENT: [string, string] = ["#FF6B4A", "#FF3D71"];
 
 export const COLORS = {
+  primary: "#281C9D",
+  secondary: "#5655B9",
+  tertiary: "#A8A3D7",
+  primarySoft: "#F2F1F9",
+  textPrimary: "#343434",
+  textSecondary: "#898989",
+  textMuted: "#989898",
+  border: "#CACACA",
+  borderSoft: "#E0E0E0",
+  error: "#FF4267",
+  info: "#0890FE",
+  warning: "#FFAF2A",
+  success: "#52D5BA",
+  orange: "#FB6B18",
   teal: "#0E9C79",
   blue: "#1D6FAE",
   coral: "#FF6B4A",
