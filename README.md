@@ -39,7 +39,7 @@
 | **AI Financial Assistant** | Conversational chatbot using last-30-day spending context for personalized answers              |
 | **CSV Export**             | Export your transaction history to a CSV file and share it natively                             |
 | **Weekly AI Email Digest** | Automated weekly summary email with AI-generated personalized saving tips                       |
-| **Multi-Currency Support** | Pick your primary currency during onboarding; change it anytime from Profile                    |
+| **Indian rupees** | All amounts use INR. Enter a starting balance during onboarding. |
 | **Profile & Avatar**       | Edit profile picture (synced to Clerk), manage accounts, and control preferences                |
 
 ---
@@ -56,7 +56,6 @@
 | **Database & Backend** | [Supabase](https://supabase.com) (PostgreSQL + Edge Functions)          |
 | **AI / LLM**           | [Google Gemini](https://ai.google.dev) `gemini-3.1-flash-lite`          |
 | **Server State**       | [TanStack React Query](https://tanstack.com/query) v5                   |
-| **Client State**       | [Zustand](https://zustand-demo.pmnd.rs) v5                              |
 | **Forms & Validation** | React Hook Form + Zod                                                   |
 | **Charts**             | react-native-gifted-charts                                              |
 | **Animations**         | React Native Reanimated 4                                               |
@@ -72,7 +71,7 @@ ApexNest/
 │   ├── _layout.tsx               # Root layout: Clerk + QueryClient + GestureHandler
 │   ├── (auth)/                   # Public auth screens (sign-in, sign-up)
 │   └── (root)/                   # Protected screens (requires auth)
-│       ├── onboarding.tsx        # First-launch currency setup
+│       ├── onboarding.tsx        # First-launch starting balance
 │       └── (tabs)/               # Bottom tab navigator
 │           ├── index.tsx         # Home dashboard
 │           ├── transactions.tsx  # Full transaction list + charts
@@ -82,7 +81,6 @@ ApexNest/
 │
 ├── components/                   # Reusable UI components
 │   ├── common/                   # Budget modal, form sheet wrappers
-│   ├── onboarding/               # Currency picker
 │   └── tabs/                     # Screen-specific components
 │       ├── add-transaction/      # ReceiptScannerModal, VoiceRecorderModal, PillGroup…
 │       ├── home/                 # TransactionRow
@@ -105,8 +103,6 @@ ApexNest/
 │   ├── query/                    # React Query client & key registry
 │   └── utils/                    # formatPrice, CSV export helpers
 │
-├── store/
-│   └── userStore.ts              # Zustand global store (currency, onboarding state)
 │
 └── supabase/
     └── functions/
@@ -215,6 +211,8 @@ create table budgets (
 
 > Enable **Row Level Security (RLS)** on all tables and add policies so users can only access their own data.
 
+Apply the migration in `supabase/migrations/202611240001_inr_onboarding.sql` after creating the tables and their RLS policies, before running this version of the app.
+
 ### 5. Run the App
 
 ```bash
@@ -269,7 +267,6 @@ A Deno edge function deployed on Supabase, triggered weekly. It:
 
 - **Clerk + Supabase JWT** — The Supabase client is initialized with `accessToken: () => clerk.getToken()` so every query runs under the user's Clerk identity, enabling Supabase RLS to enforce strict data isolation between users.
 - **React Query for server state** — All Supabase reads go through `useQuery` hooks with a centralized key registry. Mutations immediately invalidate the relevant caches so the UI is always consistent.
-- **Zustand for client state** — Only two values live in global state: `currency` (avoids prop-drilling into formatters) and `needsOnboarding` (routing guard). Everything else is colocated at the component level.
 - **Gemini structured output** — All AI extraction calls use `generationConfig.responseSchema` to guarantee JSON-parseable responses, eliminating brittle text parsing.
 - **Balance updates are sequential** — Creating/deleting transactions updates account balances via two guarded sequential calls. A future improvement is to migrate these to a Postgres RPC for true atomicity.
 
