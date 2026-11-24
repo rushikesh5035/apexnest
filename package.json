@@ -1,5 +1,5 @@
 {
-  "name": "apexnest",
+  "name": "fynlo",
   "main": "expo-router/entry",
   "version": "1.0.0",
   "scripts": {
@@ -19,6 +19,7 @@
     "@react-navigation/elements": "^2.6.3",
     "@react-navigation/native": "^7.1.8",
     "@supabase/supabase-js": "^2.112.1",
+    "@tabler/icons-react-native": "^3.52.0",
     "@tanstack/react-query": "^5.101.4",
     "babel-preset-expo": "~54.0.10",
     "currency-codes": "^2.2.0",
@@ -38,6 +39,7 @@
     "expo-image-picker": "~17.0.11",
     "expo-linear-gradient": "~15.0.8",
     "expo-linking": "~8.0.12",
+    "expo-navigation-bar": "~5.0.10",
     "expo-router": "~6.0.24",
     "expo-secure-store": "~15.0.8",
     "expo-sharing": "^57.0.10",
@@ -58,6 +60,7 @@
     "react-native-reanimated": "~4.1.1",
     "react-native-safe-area-context": "~5.6.0",
     "react-native-screens": "~4.16.0",
+    "react-native-svg": "15.12.1",
     "react-native-ui-datepicker": "^3.3.0",
     "react-native-web": "~0.21.0",
     "react-native-worklets": "0.5.1",

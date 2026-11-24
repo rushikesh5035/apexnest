@@ -1,3 +1,4 @@
+import { FYNLO_COLORS } from "@/constants/theme";
 import { useAuth } from "@clerk/expo";
 import { Redirect, Stack } from "expo-router";
 import React from "react";
@@ -15,6 +16,7 @@ export default function AuthLayout() {
     <Stack
       screenOptions={{
         headerShown: false,
+        contentStyle: { backgroundColor: FYNLO_COLORS.canvas },
       }}
     />
   );

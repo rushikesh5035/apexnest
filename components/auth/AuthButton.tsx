@@ -1,24 +1,45 @@
-import { ActivityIndicator, Text, TouchableOpacity } from "react-native";
+import { FYNLO_COLORS } from "@/constants/theme";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
 
 type Props = {
   label: string;
   onPress: () => void;
   isLoading?: boolean;
+  trailingIcon?: React.ReactNode;
 };
 
-export default function AuthButton({ label, onPress, isLoading }: Props) {
+export default function AuthButton({
+  label,
+  onPress,
+  isLoading,
+  trailingIcon,
+}: Props) {
   return (
-    <TouchableOpacity
+    <Pressable
       onPress={onPress}
-      className="w-full items-center rounded-full bg-brand-primary py-3"
+      disabled={isLoading}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{
+        disabled: Boolean(isLoading),
+        busy: Boolean(isLoading),
+      }}
+      android_ripple={{ color: FYNLO_COLORS.canvas, borderless: false }}
+      className={`min-h-14 w-full flex-row items-center justify-center overflow-hidden rounded-full bg-fynlo-primary px-6 ${isLoading ? "opacity-70" : ""}`}
+      style={({ pressed }) => ({
+        opacity: isLoading ? 0.7 : pressed ? 0.86 : 1,
+      })}
     >
       {isLoading ? (
-        <ActivityIndicator color="white" />
+        <ActivityIndicator size={27} color={FYNLO_COLORS.onPrimary} />
       ) : (
-        <Text className="font-poppins-medium text-[16px] text-white">
-          {label}
-        </Text>
+        <View className="flex-row items-center">
+          <Text className="font-poppins-semibold text-fynlo-action text-fynlo-on-primary">
+            {label}
+          </Text>
+          {trailingIcon && <View className="ml-3">{trailingIcon}</View>}
+        </View>
       )}
-    </TouchableOpacity>
+    </Pressable>
   );
 }

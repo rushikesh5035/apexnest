@@ -1,9 +1,11 @@
 import FynloLogo from "@/assets/images/fynlo-logo.svg";
-import { COLORS } from "@/constants/theme";
+import AuthButton from "@/components/auth/AuthButton";
+import { FYNLO_COLORS } from "@/constants/theme";
+import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React from "react";
-import { Image, Text, TouchableOpacity, View } from "react-native";
+import { Image, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function WelcomeScreen() {
@@ -11,50 +13,50 @@ export default function WelcomeScreen() {
   const insets = useSafeAreaInsets();
 
   return (
-    <View className="flex-1 bg-brand-primary">
-      <StatusBar style="light" backgroundColor={COLORS.primary} />
-      <View
-        className="flex-1 items-center justify-center px-6 pb-2"
-        style={{ paddingTop: insets.top }}
-      >
-        <View className="h-[250px] w-full items-center justify-center">
-          <Image
-            source={require("../../assets/images/fynlo-welcome.png")}
-            resizeMode="contain"
-            className="h-[450px] w-full"
-            accessibilityLabel="A person building savings with rupee coins"
-          />
-        </View>
-      </View>
+    <View className="flex-1 bg-fynlo-canvas" style={{ paddingTop: insets.top }}>
+      <StatusBar style="light" backgroundColor={FYNLO_COLORS.canvas} />
 
-      <View
-        className="rounded-t-[34px] bg-white px-7 pb-7 pt-7"
-        style={{ paddingBottom: Math.max(insets.bottom, 24) }}
-      >
-        <View className="mb-5 flex-row items-center justify-center gap-2">
-          <FynloLogo width={36} height={32} accessibilityLabel="Fynlo" />
-          <Text className="font-poppins-semibold text-[22px] leading-7 text-brand-text-primary">
+      <View className="flex-1 px-fynlo-page">
+        <View className="flex-row items-center pt-fynlo-header">
+          <FynloLogo width={30} height={30} accessibilityLabel="Fynlo" />
+          <Text className="ml-1 font-poppins-semibold text-fynlo-title text-fynlo-text-primary">
             Fynlo
           </Text>
         </View>
-        <Text className="text-center font-poppins-semibold text-[24px] leading-8 text-brand-text-primary">
-          Make every rupee count
-        </Text>
-        <Text className="mt-2 text-center font-poppins-regular text-[14px] leading-[22px] text-brand-text-secondary">
-          A clearer view of your money starts here.
-        </Text>
-        <Text className="mt-1 text-center font-poppins-regular text-[12px] leading-5 text-brand-text-muted">
-          Track spending, manage your budget, and build better money habits.
-        </Text>
-        <TouchableOpacity
-          onPress={() => router.push("/(auth)/sign-in")}
-          accessibilityRole="button"
-          className="mt-10 mb-5 py-3 items-center rounded-full bg-brand-primary"
-        >
-          <Text className="font-poppins-medium text-[16px] text-white">
-            Get Started
+
+        <View className="mt-fynlo-welcome-offset">
+          <Text className="font-poppins-semibold text-fynlo-display text-fynlo-text-primary">
+            Take control of{"\n"}
+            every rupee.
           </Text>
-        </TouchableOpacity>
+          <Text className="mt-3 max-w-[330px] font-poppins-regular text-fynlo-body text-fynlo-text-secondary">
+            Track your spending, build better habits, and make confident money
+            decisions.
+          </Text>
+        </View>
+
+        <View className="flex-1 items-center justify-center">
+          <Image
+            source={require("../../assets/images/welcome-illustration.png")}
+            resizeMode="contain"
+            className="h-[400px] w-full"
+            accessibilityLabel="A secure wallet with rupee savings"
+          />
+        </View>
+
+        <View style={{ paddingBottom: Math.max(insets.bottom, 32) }}>
+          <AuthButton
+            label="Get started"
+            onPress={() => router.push("/(auth)/sign-in")}
+            trailingIcon={
+              <MaterialCommunityIcons
+                name="arrow-right"
+                size={22}
+                color={FYNLO_COLORS.onPrimary}
+              />
+            }
+          />
+        </View>
       </View>
     </View>
   );
