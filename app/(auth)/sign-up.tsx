@@ -95,6 +95,39 @@ export default function SignUpScreen() {
     defaultValues: { verificationCode: "" },
   });
 
+  const finalizeSignUp = async () => {
+    setVerificationError(undefined);
+    try {
+      const { error: finalizeError } = await signUp.finalize({
+        navigate: ({ session, decorateUrl }) => {
+          if (session?.currentTask) {
+            setVerificationError(
+              "Your account needs another step. Continue from sign in.",
+            );
+            return;
+          }
+          router.replace(decorateUrl("/") as any);
+        },
+      });
+
+      if (finalizeError) {
+        setVerificationError(
+          getClerkErrorMessage(
+            finalizeError,
+            "Unable to complete sign up. Please try again.",
+          ),
+        );
+      }
+    } catch (error) {
+      setVerificationError(
+        getClerkErrorMessage(
+          error,
+          "Unable to finish signing in. Please retry.",
+        ),
+      );
+    }
+  };
+
   const onSignUpPress = async (values: signUpFormSchemaType) => {
     await runAuthRequest(async () => {
       setEmail(values.email);
@@ -164,21 +197,7 @@ export default function SignUpScreen() {
         }
 
         if (signUp.status === "complete") {
-          const { error: finalizeError } = await signUp.finalize({
-            navigate: ({ session, decorateUrl }) => {
-              if (session?.currentTask) return;
-              router.replace(decorateUrl("/") as any);
-            },
-          });
-
-          if (finalizeError) {
-            setVerificationError(
-              getClerkErrorMessage(
-                finalizeError,
-                "Unable to complete sign up. Please try again.",
-              ),
-            );
-          }
+          await finalizeSignUp();
         } else {
           setVerificationError(
             "Verification isn't complete yet. Please try again.",
@@ -221,7 +240,32 @@ export default function SignUpScreen() {
     return didResend ?? false;
   };
 
-  if (signUp.status === "complete" || isSignedIn) return null;
+  if (isSignedIn) return null;
+  if (signUp.status === "complete") {
+    return (
+      <AuthWrapper>
+        <View className="flex-1 justify-center gap-5 px-fynlo-page">
+          <Text className="font-poppins-semibold text-fynlo-title text-fynlo-text-primary">
+            Your email is verified
+          </Text>
+          {verificationError && (
+            <Text accessibilityRole="alert" className="text-fynlo-error">
+              {verificationError}
+            </Text>
+          )}
+          <AuthButton
+            label="Continue to Fynlo"
+            isLoading={isLoading}
+            onPress={() => runAuthRequest(finalizeSignUp)}
+          />
+          <AuthButton
+            label="Go to sign in"
+            onPress={() => router.replace("/sign-in")}
+          />
+        </View>
+      </AuthWrapper>
+    );
+  }
 
   if (
     signUp.status === "missing_requirements" &&
@@ -259,7 +303,11 @@ export default function SignUpScreen() {
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
       >
-        <AuthTopBar onBack={() => router.back()} />
+        <AuthTopBar
+          onBack={() =>
+            router.canGoBack() ? router.back() : router.replace("/sign-in")
+          }
+        />
 
         <View className="mt-fynlo-form-offset">
           <Text className="font-poppins-semibold text-fynlo-display text-fynlo-text-primary">
