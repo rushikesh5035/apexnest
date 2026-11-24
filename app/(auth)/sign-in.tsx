@@ -365,7 +365,15 @@ export default function SignIn() {
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
       >
-        <AuthTopBar onBack={() => router.back()} />
+        <AuthTopBar
+          onBack={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace("/(auth)/welcome");
+            }
+          }}
+        />
 
         <View className="mt-fynlo-form-offset">
           <Text className="font-poppins-semibold text-fynlo-display text-fynlo-text-primary">

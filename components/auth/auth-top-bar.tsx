@@ -4,10 +4,11 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { Pressable, Text, View } from "react-native";
 
 type Props = {
+  disabled?: boolean;
   onBack: () => void;
 };
 
-export default function AuthTopBar({ onBack }: Props) {
+export default function AuthTopBar({ onBack, disabled = false }: Props) {
   return (
     <View className="flex-row items-center justify-between">
       <View className="flex-row items-center">
@@ -22,8 +23,12 @@ export default function AuthTopBar({ onBack }: Props) {
         accessibilityLabel="Go back"
         android_ripple={{ color: FYNLO_COLORS.border, borderless: false }}
         className="min-h-12 min-w-12 flex-row items-center justify-center rounded-full px-2"
+        disabled={disabled}
+        accessibilityState={{ disabled }}
         onPress={onBack}
-        style={({ pressed }) => ({ opacity: pressed ? 0.72 : 1 })}
+        style={({ pressed }) => ({
+          opacity: disabled ? 0.5 : pressed ? 0.72 : 1,
+        })}
       >
         <MaterialCommunityIcons
           name="chevron-left"

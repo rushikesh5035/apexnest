@@ -1,7 +1,6 @@
-import {
-  ALL_CURRENCIES,
-  CurrencyPicker,
-} from "@/components/onboarding/currency-picker";
+import FynloLogo from "@/assets/images/fynlo-logo.svg";
+import AuthButton from "@/components/auth/AuthButton";
+import { FYNLO_COLORS } from "@/constants/theme";
 import { useSupabase } from "@/hooks/useSupabase";
 import {
   OnboardingFormSchemaType,
@@ -9,216 +8,211 @@ import {
 } from "@/lib/schemas/onboarding";
 import { useUserStore } from "@/store/userStore";
 import { useUser } from "@clerk/expo";
-import { Feather } from "@expo/vector-icons";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import React, { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import {
-  Image,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { SafeAreaView } from "react-native-safe-area-context";
+const INDIAN_RUPEE = "INR";
 
 export default function OnboardingScreen() {
   const { user } = useUser();
   const authSupabase = useSupabase();
-  const setCurrency = useUserStore((s) => s.setCurrency);
-  const setNeedsOnboarding = useUserStore((s) => s.setNeedsOnboarding);
-
+  const setCurrency = useUserStore((state) => state.setCurrency);
+  const setNeedsOnboarding = useUserStore((state) => state.setNeedsOnboarding);
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const [focused, setFocused] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   const {
     control,
     handleSubmit,
-    formState: { errors: formErros },
+    formState: { errors: formErrors },
   } = useForm<OnboardingFormSchemaType>({
     resolver: zodResolver(onboardingSchema),
     mode: "onBlur",
     defaultValues: { startingBalance: "" },
   });
 
-  const [selectedCurrency, setSelectedCurrency] = useState(
-    ALL_CURRENCIES.find((c) => c.code === "INR") ?? ALL_CURRENCIES[0],
-  );
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-
   const handleSave = async ({ startingBalance }: OnboardingFormSchemaType) => {
-    const parsed = parseFloat(startingBalance.replace(/,/g, ""));
+    if (!user || saving) return;
+
+    const parsedBalance = Number.parseFloat(startingBalance.replace(/,/g, ""));
     setSaving(true);
     setError("");
 
-    // call to supabase
-    const { error: updateError } = await authSupabase
-      .from("users")
-      .update({
-        currency: selectedCurrency.code,
-      })
-      .eq("clerk_id", user!.id);
+    try {
+      const { error: updateError } = await authSupabase
+        .from("users")
+        .update({ currency: INDIAN_RUPEE })
+        .eq("clerk_id", user.id);
 
-    if (updateError) {
-      setSaving(false);
-      setError("Something went wrong. Please try again.");
-      return;
-    }
+      if (updateError) throw updateError;
 
-    // update into default account
-    const { data: defaultAccount, error: accountFetchError } =
-      await authSupabase
+      const { data: defaultAccount, error: accountFetchError } =
+        await authSupabase
+          .from("accounts")
+          .select("id, balance")
+          .eq("user_id", user.id)
+          .eq("is_default", true)
+          .single();
+
+      if (accountFetchError || !defaultAccount) {
+        throw accountFetchError ?? new Error("Default account not found");
+      }
+
+      const { error: transactionError } = await authSupabase
+        .from("transactions")
+        .insert({
+          user_id: user.id,
+          account_id: defaultAccount.id,
+          type: "INCOME",
+          amount: parsedBalance,
+          category: "other_income",
+          description: "Starting balance",
+          date: new Date().toISOString(),
+          input_method: "MANUAL",
+        });
+
+      if (transactionError) throw transactionError;
+
+      const { error: balanceError } = await authSupabase
         .from("accounts")
-        .select("id, balance")
-        .eq("user_id", user!.id)
-        .eq("is_default", true)
-        .single();
+        .update({ balance: defaultAccount.balance + parsedBalance })
+        .eq("id", defaultAccount.id);
 
-    if (accountFetchError || !defaultAccount) {
+      if (balanceError) throw balanceError;
+
+      setCurrency(INDIAN_RUPEE);
+      setNeedsOnboarding(false);
+      router.replace("/(root)/(tabs)");
+    } catch (saveError) {
+      console.error("Unable to save onboarding details:", saveError);
+      setError("We couldn't save your balance. Please try again.");
+    } finally {
       setSaving(false);
-      setError("Something went wrong. Please try again.");
-      return;
     }
-
-    // update transactions
-    const { error: txError } = await authSupabase.from("transactions").insert({
-      user_id: user!.id,
-      account_id: defaultAccount.id,
-      type: "INCOME",
-      amount: parsed,
-      category: "other_income",
-      description: "Starting balance",
-      date: new Date().toISOString(),
-      input_method: "MANUAL",
-    });
-
-    if (txError) {
-      setSaving(false);
-      setError("Something went wrong. Please try again.");
-      return;
-    }
-
-    // update accounts
-    const { error: balanceError } = await authSupabase
-      .from("accounts")
-      .update({ balance: defaultAccount.balance + parsed })
-      .eq("id", defaultAccount.id);
-
-    setSaving(false);
-
-    if (balanceError) {
-      setError("Something went wrong. Please try again.");
-      return;
-    }
-
-    // update zustand store
-    setCurrency(selectedCurrency.code);
-    setNeedsOnboarding(false);
-    router.replace("/(root)/(tabs)");
   };
 
+  const message = formErrors.startingBalance?.message || error;
   return (
-    <SafeAreaView className="flex-1 bg-brand-body" edges={["top"]}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        className="flex-1"
-      >
-        <View className="flex-1 px-6 justify-center -mt-16">
-          <Image
-            source={require("../../assets/images/apexnest.png")}
-            className="w-32 h-14 mb-10"
-            resizeMode="contain"
-          />
-          <Text className="text-[#1A1D26] text-3xl font-bold mb-2">
-            Let&apos;s get you set up
-          </Text>
-          <Text className="text-brand-text-muted text-sm mb-10">
-            A couple of quick details to personalise your experience.
-          </Text>
-
-          {/* Starting balance */}
-          <Text className="text-brand-bg text-xs font-medium mb-1.5">
-            Starting balance
-          </Text>
-          <View className="flex-row items-center bg-white border border-[#E8E6DF] rounded-xl px-4 mb-1">
-            <Text className="text-brand-text-secondary text-sm mr-2">
-              {selectedCurrency.symbol}
-            </Text>
-            <Controller
-              control={control}
-              name="startingBalance"
-              render={({ field: { value, onChange } }) => (
-                <TextInput
-                  value={value}
-                  onChangeText={(v) => {
-                    setError("");
-                    onChange(v);
-                  }}
-                  placeholder="e.g. 50000"
-                  placeholderTextColor="#8A8D96"
-                  keyboardType="numeric"
-                  returnKeyType="done"
-                  className="flex-1 py-3.5 text-sm text-brand-bg"
-                />
-              )}
-            />
-          </View>
-
-          {formErros.startingBalance && (
-            <Text className="text-brand-coral mb-4 text-sm">
-              {formErros.startingBalance.message}
-            </Text>
-          )}
-
-          <View className="mb-4" />
-
-          {/* Currency picker */}
-          <Text className="text-brand-bg text-xs font-medium mb-1.5">
-            Currency
-          </Text>
-          <TouchableOpacity
-            onPress={() => setPickerOpen(true)}
-            className="flex-row items-center justify-between bg-white border border-[#E8E6DF] rounded-xl px-4 py-3.5 mb-6"
-          >
-            <Text className="text-sm text-brand-bg">
-              {selectedCurrency.symbol} {selectedCurrency.code} —{" "}
-              {selectedCurrency.name}
-            </Text>
-            <Feather name="chevron-down" size={16} color="#8A8D96" />
-          </TouchableOpacity>
-
-          {error ? (
-            <Text className="text-brand-coral text-xs mb-4">{error}</Text>
-          ) : null}
-
-          <TouchableOpacity
-            onPress={handleSubmit(handleSave)}
-            disabled={saving}
-            className="bg-brand-bg rounded-xl py-4 items-center"
-            activeOpacity={0.85}
-          >
-            <Text className="text-white text-sm font-semibold">
-              {saving ? "Saving…" : "Get started"}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
-
-      {/*  */}
-      <CurrencyPicker
-        visible={pickerOpen}
-        selectedCode={selectedCurrency.code}
-        onSelect={(currency) => {
-          setSelectedCurrency(currency);
-          setPickerOpen(false);
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      className="flex-1 bg-fynlo-canvas"
+    >
+      <StatusBar style="light" backgroundColor={FYNLO_COLORS.canvas} />
+      <ScrollView
+        contentContainerClassName="flex-grow px-fynlo-page"
+        contentContainerStyle={{
+          paddingTop: insets.top + 14,
+          paddingBottom: Math.max(insets.bottom, 32),
         }}
-        onClose={() => setPickerOpen(false)}
-      />
-    </SafeAreaView>
+        keyboardDismissMode="on-drag"
+        keyboardShouldPersistTaps="handled"
+      >
+        <View
+          accessible
+          accessibilityLabel="Fynlo"
+          className="min-h-12 flex-row items-center"
+        >
+          <FynloLogo width={26} height={30} />
+          <Text className="ml-1 font-poppins-semibold text-fynlo-title text-fynlo-text-primary">
+            Fynlo
+          </Text>
+        </View>
+        <View className="mt-fynlo-form-offset">
+          <Text
+            accessibilityRole="header"
+            className="font-poppins-semibold text-fynlo-display text-fynlo-text-primary"
+          >
+            Set your starting balance
+          </Text>
+          <Text className="mt-3 max-w-[330px] font-poppins-regular text-fynlo-body text-fynlo-text-secondary">
+            Enter the amount you have in your Cash account today.
+          </Text>
+        </View>
+
+        <Text className="mb-2 mt-10 font-poppins-medium text-fynlo-label text-fynlo-text-secondary">
+          Starting balance
+        </Text>
+        <View
+          className="min-h-12 flex-row items-center rounded-2xl border bg-fynlo-input px-4"
+          style={{
+            borderColor: message
+              ? FYNLO_COLORS.error
+              : focused
+                ? FYNLO_COLORS.primary
+                : FYNLO_COLORS.border,
+          }}
+        >
+          <Text
+            className="mr-2 font-poppins-medium text-fynlo-body text-fynlo-text-secondary"
+            style={{ includeFontPadding: false }}
+          >
+            ₹
+          </Text>
+          <Controller
+            control={control}
+            name="startingBalance"
+            render={({ field: { value, onBlur, onChange } }) => (
+              <TextInput
+                value={value}
+                onFocus={() => setFocused(true)}
+                onBlur={() => {
+                  setFocused(false);
+                  onBlur();
+                }}
+                onChangeText={(text) => {
+                  setError("");
+                  onChange(text);
+                }}
+                editable={!saving}
+                accessibilityLabel="Starting balance in Indian rupees"
+                keyboardType="decimal-pad"
+                returnKeyType="done"
+                autoCorrect={false}
+                onSubmitEditing={handleSubmit(handleSave)}
+                placeholder="0.00"
+                placeholderTextColor={FYNLO_COLORS.placeholder}
+                selectionColor={FYNLO_COLORS.primary}
+                underlineColorAndroid="transparent"
+                className="h-14 rounded-full flex-1 self-stretch p-0 font-poppins-medium text-fynlo-body text-fynlo-text-primary"
+                style={{
+                  includeFontPadding: false,
+                  textAlignVertical: "center",
+                }}
+              />
+            )}
+          />
+        </View>
+        {message && (
+          <Text
+            accessibilityRole="alert"
+            className="mt-3 font-poppins-regular text-fynlo-caption text-fynlo-error"
+          >
+            {message}
+          </Text>
+        )}
+        <View className="mt-7">
+          <AuthButton
+            label="Continue to Fynlo"
+            onPress={handleSubmit(handleSave)}
+            isLoading={saving}
+          />
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
