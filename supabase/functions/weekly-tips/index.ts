@@ -73,7 +73,7 @@ Deno.serve(async () => {
 
   const { data: users, error: usersError } = await supabase
     .from("users")
-    .select("clerk_id, email, name, currency");
+    .select("clerk_id, email, name");
   if (usersError) throw usersError;
 
   let sent = 0;
@@ -102,7 +102,7 @@ Deno.serve(async () => {
       byCategory[tx.category] = (byCategory[tx.category] ?? 0) + tx.amount;
     }
 
-    const currency = user.currency ?? "USD";
+    const currency = "INR";
     const tips = await generateTips(
       currency,
       byCategory,

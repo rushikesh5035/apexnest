@@ -1,7 +1,6 @@
 import { useBudgetQuery } from "@/hooks/queries/useBudgetQuery";
 import { useTransactionsQuery } from "@/hooks/queries/useTransactionsQuery";
 import { askAssistant } from "@/lib/services/ai-assistant";
-import { useUserStore } from "@/store/userStore";
 import { useUser } from "@clerk/expo";
 import { Feather } from "@expo/vector-icons";
 import React, { useState } from "react";
@@ -60,7 +59,6 @@ function MessageBubble({ message }: { message: ChatMessage }) {
 
 export default function Assistant() {
   const { user } = useUser();
-  const currency = useUserStore((s) => s.currency);
   const { refetch: refetchTransactions } = useTransactionsQuery();
   const { refetch: refetchBudget } = useBudgetQuery();
 
@@ -85,7 +83,7 @@ export default function Assistant() {
       const [{ data: transactions = [] }, { data: budget = null }] =
         await Promise.all([refetchTransactions(), refetchBudget()]);
 
-      const reply = await askAssistant(text, transactions, budget, currency);
+      const reply = await askAssistant(text, transactions, budget);
       setMessages((prev) => [
         ...prev,
         { id: (Date.now() + 1).toString(), role: "assistant", content: reply },

@@ -316,7 +316,14 @@ export default function ForgotPasswordScreen() {
       >
         <AuthTopBar
           disabled={isLoading}
-          onBack={isEmailStep ? () => router.back() : resetToEmail}
+          onBack={
+            isEmailStep
+              ? () =>
+                  router.canGoBack()
+                    ? router.back()
+                    : router.replace("/sign-in")
+              : resetToEmail
+          }
         />
 
         <View className="mt-fynlo-form-offset">
