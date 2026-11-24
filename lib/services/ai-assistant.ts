@@ -7,11 +7,7 @@ import { Transaction } from "./transactions";
 const GEMINI_URL =
   "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent";
 
-function buildContext(
-  transactions: Transaction[],
-  budget: Budget | null,
-  currency: string,
-) {
+function buildContext(transactions: Transaction[], budget: Budget | null) {
   const now = new Date();
   const cutoff = subDays(now, 30);
   const recent = transactions.filter((tx) => new Date(tx.date) >= cutoff);
@@ -39,14 +35,13 @@ function buildContext(
     .sort((a, b) => b[1] - a[1])
     .map(
       ([category, amount]) =>
-        `- ${getCategoryConfig(category as any).label}: ${formatPrice(amount, currency)}`,
+        `- ${getCategoryConfig(category as any).label}: ${formatPrice(amount)}`,
     )
     .join("\n");
 
   const budgetLine = budget
-    ? `${formatPrice(thisMonthExpense, currency)} spent of ${formatPrice(
+    ? `${formatPrice(thisMonthExpense)} spent of ${formatPrice(
         budget.amount,
-        currency,
       )} monthly budget`
     : "No monthly budget set.";
 
@@ -56,7 +51,7 @@ function buildContext(
       (tx) =>
         `- ${format(new Date(tx.date), "d MMM yyyy")} | ${tx.type} | ${
           getCategoryConfig(tx.category).label
-        } | ${formatPrice(tx.amount, currency)}${
+        } | ${formatPrice(tx.amount)}${
           tx.description ? ` | ${tx.description}` : ""
         }`,
     )
@@ -65,8 +60,8 @@ function buildContext(
   // Return a summary of the last 30 days of transactions, spending by category, and budget status to the LLM.
   // This will be used as context for the AI assistant to answer user questions.
   return `Last 30 days summary:
-Total income: ${formatPrice(income, currency)}
-Total expense: ${formatPrice(expense, currency)}
+Total income: ${formatPrice(income)}
+Total expense: ${formatPrice(expense)}
 
 Spending by category:
 ${categoryLines || "No expenses recorded."}
@@ -82,12 +77,11 @@ export async function askAssistant(
   question: string,
   transactions: Transaction[],
   budget: Budget | null,
-  currency: string,
 ) {
   const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
   if (!apiKey) throw new Error("Missing EXPO_PUBLIC_GEMINI_API_KEY");
 
-  const context = buildContext(transactions, budget, currency);
+  const context = buildContext(transactions, budget);
 
   const prompt = `You are a helpful personal finance assistant inside the ApexNest app. Answer the user's question using only the financial data below. Be concise and specific with numbers. If the data doesn't answer the question, say so.
   ${context}

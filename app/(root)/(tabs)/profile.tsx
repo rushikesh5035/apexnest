@@ -1,11 +1,8 @@
-import { CurrencyPicker } from "@/components/onboarding/currency-picker";
 import AccountModal from "@/components/tabs/profile/AccountModal";
 import { useSetDefaultAccount } from "@/hooks/mutations/useAccountMutation";
 import { useAccountsQuery } from "@/hooks/queries/useAccountsQuery";
-import { useSupabase } from "@/hooks/useSupabase";
 import { Account, AccountType } from "@/lib/services/accounts";
 import { formatPrice } from "@/lib/utils";
-import { useUserStore } from "@/store/userStore";
 import { useAuth, useUser } from "@clerk/expo";
 import { Feather } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
@@ -83,14 +80,10 @@ export default function ProfileScreen() {
   const { user } = useUser();
   const { signOut } = useAuth();
   const router = useRouter();
-  const supabase = useSupabase();
-  const currency = useUserStore((state) => state.currency);
-  const setCurrency = useUserStore((state) => state.setCurrency);
   const [biometricLock, setBiometricLock] = useState(false);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
-  const [currencyPickerOpen, setCurrencyPickerOpen] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   const {
@@ -168,20 +161,6 @@ export default function ProfileScreen() {
     }
   };
 
-  const handleCurrencySelect = async (selected: { code: string }) => {
-    setCurrencyPickerOpen(false);
-    if (!user) return;
-    try {
-      const { error } = await supabase
-        .from("users")
-        .update({ currency: selected.code })
-        .eq("clerk_id", user.id);
-      if (error) throw error;
-      setCurrency(selected.code);
-    } catch {
-      Alert.alert("Error", "Couldn't update your currency.");
-    }
-  };
 
   return (
     <SafeAreaView className="flex-1 bg-brand-body" edges={["top"]}>
@@ -250,7 +229,7 @@ export default function ProfileScreen() {
                 key={account.id}
                 icon={ACCOUNT_ICON[account.type]}
                 label={account.name + (account.is_default ? " (default)" : "")}
-                value={formatPrice(account.balance, currency)}
+                value={formatPrice(account.balance)}
                 onPress={() => {
                   setEditingAccount(account);
                   setModalVisible(true);
@@ -271,12 +250,6 @@ export default function ProfileScreen() {
         {/* Preferences */}
         <SectionLabel>Preferences</SectionLabel>
         <View className="mx-5 rounded-2xl overflow-hidden border border-[#E8E6DF]">
-          <Row
-            icon="dollar-sign"
-            label="Currency"
-            value={currency}
-            onPress={() => setCurrencyPickerOpen(true)}
-          />
 
           <View className="flex-row items-center bg-white px-4 py-3.5">
             <View className="w-8 h-8 rounded-full bg-[#F5F4F0] items-center justify-center mr-3">
@@ -311,12 +284,6 @@ export default function ProfileScreen() {
         />
       )}
 
-      <CurrencyPicker
-        visible={currencyPickerOpen}
-        selectedCode={currency}
-        onSelect={handleCurrencySelect}
-        onClose={() => setCurrencyPickerOpen(false)}
-      />
     </SafeAreaView>
   );
 }

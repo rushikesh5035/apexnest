@@ -6,7 +6,6 @@ import { useBudgetQuery } from "@/hooks/queries/useBudgetQuery";
 import { useTransactionsQuery } from "@/hooks/queries/useTransactionsQuery";
 import { Transaction } from "@/lib/services/transactions";
 import { formatPrice } from "@/lib/utils";
-import { useUserStore } from "@/store/userStore";
 import { useUser } from "@clerk/expo";
 import { Feather } from "@expo/vector-icons";
 import { isSameMonth } from "date-fns";
@@ -56,7 +55,6 @@ const QUICK_ACTIONS = [
 export default function HomeScreen() {
   const { user } = useUser();
   const router = useRouter();
-  const currency = useUserStore((s) => s.currency);
 
   const [budgetModalOpen, setBudgetModalOpen] = useState(false);
 
@@ -159,8 +157,8 @@ export default function HomeScreen() {
             {/* left side */}
             <Image
               source={require("../../../assets/images/apexnest-light.png")}
-              style={{ width: 100, height: "100%" }}
-              resizeMode="contain"
+              style={{ width: 125, height: 50 }}
+              resizeMode="cover"
             />
 
             {/* Right side */}
@@ -193,25 +191,25 @@ export default function HomeScreen() {
 
           {/*  */}
           <View className="mb-[22px]">
-            <Text className="text-brand-text-secondary text-xs mb-1.5">
+            <Text className="text-brand-text-secondary text-[13px]">
               Total balance
             </Text>
-            <Text className="text-brand-text-primary text-[38px] font-medium tracking-tight">
-              {formatPrice(totalBalance, currency)}
+            <Text className="text-brand-text-primary text-[25px] font-medium tracking-tight">
+              {formatPrice(totalBalance)}
             </Text>
 
-            <View className="flex-row gap-3.5 mt-2.5">
+            <View className="flex-row gap-3.5 mt-1.5">
               <View className="flex-row items-center gap-1.5">
                 <Feather name="arrow-up-right" size={14} color="#3DDC84" />
                 <Text className="text-brand-success text-[13px]">
-                  {formatPrice(monthIncome, currency)}
+                  {formatPrice(monthIncome)}
                 </Text>
               </View>
 
               <View className="flex-row items-center gap-1.5">
                 <Feather name="arrow-down-right" size={14} color="#FF6B4A" />
                 <Text className="text-brand-coral text-[13px]">
-                  {formatPrice(monthExpense, currency)}
+                  {formatPrice(monthExpense)}
                 </Text>
               </View>
             </View>
@@ -276,8 +274,8 @@ export default function HomeScreen() {
             {budget ? (
               <>
                 <Text>
-                  {formatPrice(monthExpense, currency)} of{" "}
-                  {formatPrice(budget.amount, currency)} spent
+                  {formatPrice(monthExpense)} of{" "}
+                  {formatPrice(budget.amount)} spent
                 </Text>
                 <View className="h-2 rounded-full bg-[#F0EEE7] overflow-hidden">
                   <View
@@ -336,7 +334,7 @@ export default function HomeScreen() {
                         </Text>
                       </View>
                       <Text className="text-brand-bg text-[11px] font-medium">
-                        {formatPrice(c.amount, currency)}
+                        {formatPrice(c.amount)}
                       </Text>
                     </View>
                   ))}
