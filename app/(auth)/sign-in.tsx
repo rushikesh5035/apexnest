@@ -1,10 +1,11 @@
+import AuthTopBar from "@/components/auth/auth-top-bar";
 import AuthButton from "@/components/auth/AuthButton";
 import AuthFooter from "@/components/auth/AuthFooter";
 import AuthInput from "@/components/auth/AuthInput";
 import AuthWrapper from "@/components/auth/AuthWrapper";
 import HostedAuthButton from "@/components/auth/HostedAuthButton";
 import OtpVerifyScreen from "@/components/auth/OtpVerifyScreen";
-import { COLORS } from "@/constants/theme";
+import { FYNLO_COLORS } from "@/constants/theme";
 import {
   sigInFormSchemaType,
   signInSchema,
@@ -12,40 +13,75 @@ import {
   verificationCodeSchema,
 } from "@/lib/schemas/auth";
 import { useSignIn } from "@clerk/expo";
-import { Ionicons } from "@expo/vector-icons";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import React, { useEffect, useRef } from "react";
+import React, { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import {
-  Image,
-  Keyboard,
+  findNodeHandle,
+  Pressable,
   ScrollView,
   Text,
-  TouchableOpacity,
+  TextInput,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+type VerificationStrategy =
+  "email_code" | "phone_code" | "totp" | "backup_code";
+
+const verificationStrategies: VerificationStrategy[] = [
+  "phone_code",
+  "email_code",
+  "totp",
+  "backup_code",
+];
+
+const getClerkErrorMessage = (error: any, fallback: string) =>
+  error?.errors?.[0]?.longMessage ?? error?.errors?.[0]?.message ?? fallback;
 
 export default function SignIn() {
   const { signIn, errors, fetchStatus } = useSignIn();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
-  const isLoading = fetchStatus === "fetching";
+  const emailInputRef = useRef<TextInput>(null);
+  const passwordInputRef = useRef<TextInput>(null);
+  const requestInFlightRef = useRef(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const isLoading = fetchStatus === "fetching" || isProcessing;
+  const [formError, setFormError] = useState<string>();
+  const [verificationError, setVerificationError] = useState<string>();
+  const [verificationStrategy, setVerificationStrategy] =
+    useState<VerificationStrategy>();
 
-  const scrollToActiveField = () => {
-    scrollViewRef.current?.scrollTo({ y: 250, animated: true });
+  const runAuthRequest = async <T,>(request: () => Promise<T>) => {
+    if (requestInFlightRef.current) return;
+
+    requestInFlightRef.current = true;
+    setIsProcessing(true);
+
+    try {
+      return await request();
+    } finally {
+      requestInFlightRef.current = false;
+      setIsProcessing(false);
+    }
   };
 
-  useEffect(() => {
-    const keyboardHideListener = Keyboard.addListener("keyboardDidHide", () => {
-      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-    });
+  const scrollFocusedInputIntoView = (input: TextInput | null) => {
+    const inputHandle = findNodeHandle(input);
+    if (!inputHandle) return;
 
-    return () => keyboardHideListener.remove();
-  }, []);
+    requestAnimationFrame(() => {
+      scrollViewRef.current?.scrollResponderScrollNativeHandleToKeyboard(
+        inputHandle,
+        72,
+        true,
+      );
+    });
+  };
 
   const {
     control,
@@ -60,6 +96,7 @@ export default function SignIn() {
   const {
     control: verificationCodeControl,
     handleSubmit: handleVerificationCodeSubmit,
+    resetField: resetVerificationCodeField,
     formState: { errors: verificationCodeErrors },
   } = useForm<verificationCodeFormSchemaType>({
     resolver: zodResolver(verificationCodeSchema),
@@ -68,171 +105,362 @@ export default function SignIn() {
   });
 
   const finalizeSignIn = async () => {
-    await signIn.finalize({
-      navigate: ({ session, decorateUrl }) => {
-        if (session?.currentTask) return;
-        router.replace(decorateUrl("/") as any);
-      },
-    });
+    try {
+      const { error } = await signIn.finalize({
+        navigate: ({ session, decorateUrl }) => {
+          if (session?.currentTask) return;
+          router.replace(decorateUrl("/") as any);
+        },
+      });
+
+      return error
+        ? getClerkErrorMessage(
+            error,
+            "Unable to complete sign in. Please try again.",
+          )
+        : undefined;
+    } catch (error) {
+      return getClerkErrorMessage(
+        error,
+        "Unable to complete sign in. Please try again.",
+      );
+    }
   };
 
   const onSignInPress = async (values: sigInFormSchemaType) => {
-    const { error } = await signIn.password({
-      emailAddress: values.email,
-      password: values.password,
+    await runAuthRequest(async () => {
+      setFormError(undefined);
+      setVerificationError(undefined);
+
+      try {
+        const { error } = await signIn.password({
+          emailAddress: values.email,
+          password: values.password,
+        });
+
+        if (error) {
+          setFormError(
+            getClerkErrorMessage(error, "Unable to sign in. Please try again."),
+          );
+          return;
+        }
+
+        if (signIn.status === "complete") {
+          const finalizeError = await finalizeSignIn();
+          if (finalizeError) setFormError(finalizeError);
+        } else if (signIn.status === "needs_second_factor") {
+          const strategy = verificationStrategies.find((candidate) =>
+            signIn.supportedSecondFactors.some(
+              (factor) => factor.strategy === candidate,
+            ),
+          );
+
+          if (!strategy) {
+            setFormError(
+              "This account requires a verification method that Fynlo cannot use yet.",
+            );
+            return;
+          }
+
+          if (strategy === "phone_code") {
+            const { error: phoneCodeError } = await signIn.mfa.sendPhoneCode();
+            if (phoneCodeError) {
+              setFormError(
+                getClerkErrorMessage(
+                  phoneCodeError,
+                  "We couldn't send a verification code. Please try again.",
+                ),
+              );
+              return;
+            }
+          } else if (strategy === "email_code") {
+            const { error: emailCodeError } = await signIn.mfa.sendEmailCode();
+            if (emailCodeError) {
+              setFormError(
+                getClerkErrorMessage(
+                  emailCodeError,
+                  "We couldn't send a verification code. Please try again.",
+                ),
+              );
+              return;
+            }
+          }
+
+          setVerificationStrategy(strategy);
+        } else if (signIn.status === "needs_client_trust") {
+          const emailCodeFactor = signIn.supportedSecondFactors.find(
+            (factor) => factor.strategy === "email_code",
+          );
+          if (!emailCodeFactor) {
+            setFormError("Email verification is unavailable for this device.");
+            return;
+          }
+
+          const { error: emailCodeError } = await signIn.mfa.sendEmailCode();
+          if (emailCodeError) {
+            setFormError(
+              getClerkErrorMessage(
+                emailCodeError,
+                "We couldn't send a verification code. Please try again.",
+              ),
+            );
+            return;
+          }
+
+          setVerificationStrategy("email_code");
+        } else {
+          setFormError("We couldn't complete sign in. Please try again.");
+        }
+      } catch (error) {
+        setFormError(
+          getClerkErrorMessage(error, "Unable to connect. Please try again."),
+        );
+      }
     });
-
-    if (error) return;
-
-    if (signIn.status === "complete") {
-      await finalizeSignIn();
-    } else if (signIn.status === "needs_second_factor") {
-      await signIn.mfa.sendPhoneCode();
-    } else if (signIn.status === "needs_client_trust") {
-      const emailCodeFactor = signIn.supportedSecondFactors.find(
-        (factor) => factor.strategy === "email_code",
-      );
-      if (emailCodeFactor) await signIn.mfa.sendEmailCode();
-    } else {
-      console.error("Sign-in attempt not complete:", signIn);
-    }
   };
 
   const onVerifyCodePress = async ({
     verificationCode,
   }: verificationCodeFormSchemaType) => {
-    await signIn.mfa.verifyEmailCode({ code: verificationCode });
+    const code = verificationCode.trim();
+    const requiresSixDigits = verificationStrategy !== "backup_code";
 
-    if (signIn.status === "complete") {
-      await finalizeSignIn();
-    } else {
-      console.error("Sign-in attempt not complete:", signIn);
+    if (requiresSixDigits && !/^\d{6}$/.test(code)) {
+      setVerificationError("Enter the 6-digit verification code.");
+      return;
     }
+
+    await runAuthRequest(async () => {
+      setVerificationError(undefined);
+
+      try {
+        const result =
+          verificationStrategy === "phone_code"
+            ? await signIn.mfa.verifyPhoneCode({ code })
+            : verificationStrategy === "totp"
+              ? await signIn.mfa.verifyTOTP({ code })
+              : verificationStrategy === "backup_code"
+                ? await signIn.mfa.verifyBackupCode({ code })
+                : await signIn.mfa.verifyEmailCode({ code });
+
+        if (result.error) {
+          resetVerificationCodeField("verificationCode");
+          setVerificationError(
+            getClerkErrorMessage(
+              result.error,
+              "That code isn't valid. Check it and try again.",
+            ),
+          );
+          return;
+        }
+
+        if (signIn.status === "complete") {
+          const finalizeError = await finalizeSignIn();
+          if (finalizeError) setVerificationError(finalizeError);
+        } else {
+          setVerificationError(
+            "Verification isn't complete yet. Please try again.",
+          );
+        }
+      } catch (error) {
+        setVerificationError(
+          getClerkErrorMessage(error, "Unable to connect. Please try again."),
+        );
+      }
+    });
   };
 
   const onResendVerificationCodePress = async () => {
-    await signIn.mfa.sendEmailCode();
+    const didResend = await runAuthRequest(async () => {
+      setVerificationError(undefined);
+
+      try {
+        const result =
+          verificationStrategy === "phone_code"
+            ? await signIn.mfa.sendPhoneCode()
+            : await signIn.mfa.sendEmailCode();
+
+        if (result.error) {
+          setVerificationError(
+            getClerkErrorMessage(
+              result.error,
+              "We couldn't send a new code. Please try again.",
+            ),
+          );
+          return false;
+        }
+
+        resetVerificationCodeField("verificationCode");
+        return true;
+      } catch (error) {
+        setVerificationError(
+          getClerkErrorMessage(error, "Unable to connect. Please try again."),
+        );
+        return false;
+      }
+    });
+
+    return didResend ?? false;
   };
 
-  if (signIn.status === "needs_client_trust") {
+  if (
+    (signIn.status === "needs_client_trust" ||
+      signIn.status === "needs_second_factor") &&
+    verificationStrategy
+  ) {
+    const isPhoneCode = verificationStrategy === "phone_code";
+    const isTotp = verificationStrategy === "totp";
+    const isBackupCode = verificationStrategy === "backup_code";
+
     return (
       <OtpVerifyScreen
+        title={
+          isBackupCode
+            ? "Use a backup code"
+            : isTotp
+              ? "Enter your authenticator code"
+              : signIn.status === "needs_client_trust"
+                ? "Verify this device"
+                : "Two-step verification"
+        }
+        subtitle={
+          isBackupCode
+            ? "Enter one of your saved backup codes."
+            : isTotp
+              ? "Open your authenticator app and enter the current code."
+              : isPhoneCode
+                ? "We sent a code to your phone."
+                : "We sent a code to your email."
+        }
+        placeholder={isBackupCode ? "Backup code" : undefined}
+        codeInputMode={isBackupCode ? "text" : "numeric"}
         control={verificationCodeControl}
         error={verificationCodeErrors.verificationCode?.message}
-        clerkError={errors.fields.code?.message}
+        clerkError={verificationError || errors.fields.code?.message}
         isLoading={isLoading}
         onVerify={handleVerificationCodeSubmit(onVerifyCodePress)}
-        onResend={onResendVerificationCodePress}
-        onReset={() => signIn.reset()}
+        onResend={
+          isTotp || isBackupCode ? undefined : onResendVerificationCodePress
+        }
+        onBack={() => {
+          setVerificationError(undefined);
+          setVerificationStrategy(undefined);
+          signIn.reset();
+        }}
       />
     );
   }
 
   return (
     <AuthWrapper>
-      <StatusBar style="light" backgroundColor={COLORS.primary} />
+      <StatusBar style="light" backgroundColor={FYNLO_COLORS.canvas} />
       <ScrollView
         ref={scrollViewRef}
-        className="flex-1 bg-brand-primary"
-        contentContainerClassName="flex-grow"
+        className="flex-1 bg-fynlo-canvas"
+        contentContainerClassName="flex-grow px-fynlo-page"
+        contentContainerStyle={{
+          paddingTop: insets.top + 14,
+          paddingBottom: Math.max(insets.bottom, 32),
+        }}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
       >
-        <View
-          className="h-[390px] px-6"
-          style={{ paddingTop: insets.top + 14 }}
-        >
-          <TouchableOpacity
-            onPress={() => router.back()}
-            className="h-10 flex-row items-center"
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-          >
-            <Ionicons name="chevron-back" size={25} color="white" />
-            <Text className="ml-2 font-poppins-medium text-[16px] text-white">
-              Back
-            </Text>
-          </TouchableOpacity>
-          <Text className="mt-3 font-poppins-semibold text-[24px] leading-[32px] text-white">
-            Log in to stay on top of your money.
+        <AuthTopBar onBack={() => router.back()} />
+
+        <View className="mt-fynlo-form-offset">
+          <Text className="font-poppins-semibold text-fynlo-display text-fynlo-text-primary">
+            Welcome back.
           </Text>
-          <Text className="mt-2 font-poppins-regular text-[14px] leading-5 text-white/80 w-[220px] ">
-            See your spending clearly and keep your goals moving.
+          <Text className="mt-3 max-w-[310px] font-poppins-regular text-fynlo-body text-fynlo-text-secondary">
+            Sign in to continue managing your money with clarity.
           </Text>
-          <View className="absolute bottom-0 left-0 right-0 h-[230px] items-end justify-end">
-            <Image
-              source={require("../../assets/images/signin-illustration.png")}
-              resizeMode="contain"
-              className="h-[230px] w-[260px]"
-              accessibilityLabel="A secure wallet with rupee savings"
-            />
-          </View>
         </View>
 
-        <View className="-mt-4 flex-1 rounded-t-[30px] bg-white px-6 pb-8 pt-5">
-          <View className="items-center gap-1  mb-4">
-            <Text className="text-center font-poppins-semibold text-[24px] leading-8 text-brand-text-primary">
-              Sign in
-            </Text>
-            <Text className="text-center font-poppins-regular text-[12px] leading-5 text-brand-text-secondary">
-              Welcome back to Fynlo. Enter your details to continue.
-            </Text>
-          </View>
-          <View className="mt-6 gap-2">
-            {/* Email Input */}
-            <AuthInput
-              control={control}
-              name="email"
-              placeholder="Email address"
-              autoCapitalize="none"
-              keyboardType="email-address"
-              icon="person-outline"
-              onFocus={scrollToActiveField}
-              error={
-                formErrors.email?.message || errors.fields.identifier?.message
-              }
-              className="h-[46px] rounded-full border-brand-border px-3 font-poppins-regular text-[14px] text-brand-text-primary"
-            />
-            {/* Password Input */}
-            <AuthInput
-              control={control}
-              name="password"
-              placeholder="Password"
-              secureTextEntry
-              icon="lock-closed-outline"
-              onFocus={scrollToActiveField}
-              error={
-                formErrors.password?.message || errors.fields.password?.message
-              }
-              className="h-[46px] rounded-full border-brand-border px-3 font-poppins-regular text-[14px] text-brand-text-primary"
-            />
-          </View>
+        <View className="mt-10">
+          <Text className="mb-2 font-poppins-medium text-fynlo-label text-fynlo-text-secondary">
+            Email address
+          </Text>
+          <AuthInput
+            control={control}
+            name="email"
+            placeholder="you@example.com"
+            autoCapitalize="none"
+            keyboardType="email-address"
+            autoComplete="email"
+            icon="email-outline"
+            inputRef={emailInputRef}
+            returnKeyType="next"
+            submitBehavior="submit"
+            onFocus={() => scrollFocusedInputIntoView(emailInputRef.current)}
+            onSubmitEditing={() => passwordInputRef.current?.focus()}
+            error={
+              formErrors.email?.message || errors.fields.identifier?.message
+            }
+          />
 
-          <View className="mt-4 gap-4">
-            {/* Sign-in Button */}
+          <Text className="mb-2 mt-5 font-poppins-medium text-fynlo-label text-fynlo-text-secondary">
+            Password
+          </Text>
+          <AuthInput
+            control={control}
+            name="password"
+            placeholder="Enter your password"
+            secureTextEntry
+            autoCapitalize="none"
+            autoComplete="current-password"
+            icon="lock-outline"
+            inputRef={passwordInputRef}
+            returnKeyType="done"
+            submitBehavior="blurAndSubmit"
+            onFocus={() => scrollFocusedInputIntoView(passwordInputRef.current)}
+            onSubmitEditing={handleSubmit(onSignInPress)}
+            error={
+              formErrors.password?.message || errors.fields.password?.message
+            }
+          />
+
+          {formError && (
+            <Text
+              accessibilityRole="alert"
+              className="mt-3 font-poppins-regular text-fynlo-caption text-fynlo-error"
+            >
+              {formError}
+            </Text>
+          )}
+
+          <Pressable
+            onPress={() => router.push("/forgot-password")}
+            accessibilityRole="button"
+            accessibilityLabel="Forgot password"
+            android_ripple={{ color: FYNLO_COLORS.border, borderless: false }}
+            className="mt-3 min-h-12 self-end justify-center rounded-full px-2"
+            style={({ pressed }) => ({ opacity: pressed ? 0.72 : 1 })}
+          >
+            <Text className="font-poppins-medium text-fynlo-label text-fynlo-primary">
+              Forgot password?
+            </Text>
+          </Pressable>
+
+          <View className="mt-7 gap-5">
             <AuthButton
               label="Sign in"
               onPress={handleSubmit(onSignInPress)}
               isLoading={isLoading}
             />
 
-            <View className="mt-4 flex-row items-center gap-3">
-              <View className="h-px flex-1 bg-brand-border-soft" />
-              <Text className="font-poppins-regular text-[12px] text-brand-text-secondary">
+            <View className="flex-row items-center gap-3">
+              <View className="h-px flex-1 bg-fynlo-divider" />
+              <Text className="font-poppins-regular text-fynlo-label text-fynlo-text-muted">
                 Or continue with
               </Text>
-              <View className="h-px flex-1 bg-brand-border-soft" />
+              <View className="h-px flex-1 bg-fynlo-divider" />
             </View>
 
-            {/* Sign-in with Google Button*/}
             <HostedAuthButton mode="sign-in" />
-          </View>
 
-          <View className="mt-auto items-center pt-8">
-            {/*  */}
             <AuthFooter
-              label="Don't have an account?"
-              linkText="Sign Up"
+              label="Don't have an account ?"
+              linkText="Sign up"
               href="/sign-up"
             />
           </View>

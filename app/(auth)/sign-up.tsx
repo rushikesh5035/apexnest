@@ -1,10 +1,11 @@
 import AuthButton from "@/components/auth/AuthButton";
 import AuthFooter from "@/components/auth/AuthFooter";
 import AuthInput from "@/components/auth/AuthInput";
+import AuthTopBar from "@/components/auth/auth-top-bar";
 import AuthWrapper from "@/components/auth/AuthWrapper";
 import HostedAuthButton from "@/components/auth/HostedAuthButton";
 import OtpVerifyScreen from "@/components/auth/OtpVerifyScreen";
-import { COLORS } from "@/constants/theme";
+import { FYNLO_COLORS } from "@/constants/theme";
 import {
   signUpFormSchemaType,
   signUpSchema,
@@ -12,18 +13,16 @@ import {
   verificationCodeSchema,
 } from "@/lib/schemas/auth";
 import { useAuth, useSignUp } from "@clerk/expo";
-import { Ionicons } from "@expo/vector-icons";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import {
-  Image,
-  Keyboard,
+  findNodeHandle,
   ScrollView,
   Text,
-  TouchableOpacity,
+  TextInput,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -34,20 +33,46 @@ export default function SignUpScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
-  const isLoading = fetchStatus === "fetching";
+  const firstNameInputRef = useRef<TextInput>(null);
+  const lastNameInputRef = useRef<TextInput>(null);
+  const emailInputRef = useRef<TextInput>(null);
+  const passwordInputRef = useRef<TextInput>(null);
+  const requestInFlightRef = useRef(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const isLoading = fetchStatus === "fetching" || isProcessing;
   const [email, setEmail] = useState("");
+  const [formError, setFormError] = useState<string>();
+  const [verificationError, setVerificationError] = useState<string>();
 
-  const scrollToActiveField = () => {
-    scrollViewRef.current?.scrollTo({ y: 290, animated: true });
+  const getClerkErrorMessage = (error: any, fallback: string) =>
+    error?.errors?.[0]?.longMessage ?? error?.errors?.[0]?.message ?? fallback;
+
+  const runAuthRequest = async <T,>(request: () => Promise<T>) => {
+    if (requestInFlightRef.current) return;
+
+    requestInFlightRef.current = true;
+    setIsProcessing(true);
+
+    try {
+      return await request();
+    } finally {
+      requestInFlightRef.current = false;
+      setIsProcessing(false);
+    }
   };
 
-  useEffect(() => {
-    const keyboardHideListener = Keyboard.addListener("keyboardDidHide", () => {
-      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-    });
+  const scrollFocusedInputIntoView = (input: TextInput | null) => {
+    const inputHandle = findNodeHandle(input);
+    if (!inputHandle) return;
 
-    return () => keyboardHideListener.remove();
-  }, []);
+    requestAnimationFrame(() => {
+      scrollViewRef.current?.scrollResponderScrollNativeHandleToKeyboard(
+        inputHandle,
+        72,
+        true,
+      );
+    });
+  };
 
   const {
     control,
@@ -62,6 +87,7 @@ export default function SignUpScreen() {
   const {
     control: verificationCodeControl,
     handleSubmit: handleVerificationCodeSubmit,
+    resetField: resetVerificationCodeField,
     formState: { errors: verificationCodeErrors },
   } = useForm<verificationCodeFormSchemaType>({
     resolver: zodResolver(verificationCodeSchema),
@@ -70,42 +96,129 @@ export default function SignUpScreen() {
   });
 
   const onSignUpPress = async (values: signUpFormSchemaType) => {
-    setEmail(values.email);
+    await runAuthRequest(async () => {
+      setEmail(values.email);
+      setFormError(undefined);
+      setVerificationError(undefined);
 
-    const { error } = await signUp.password({
-      firstName: values.firstName,
-      lastName: values.lastName,
-      emailAddress: values.email,
-      password: values.password,
+      try {
+        const { error } = await signUp.password({
+          firstName: values.firstName,
+          lastName: values.lastName,
+          emailAddress: values.email,
+          password: values.password,
+        });
+
+        if (error) {
+          setFormError(
+            getClerkErrorMessage(
+              error,
+              "Unable to create your account. Please try again.",
+            ),
+          );
+          return;
+        }
+
+        const { error: emailCodeError } =
+          await signUp.verifications.sendEmailCode();
+        if (emailCodeError) {
+          setFormError(
+            getClerkErrorMessage(
+              emailCodeError,
+              "We couldn't send a verification code. Please try again.",
+            ),
+          );
+        }
+      } catch (error) {
+        setFormError(
+          getClerkErrorMessage(error, "Unable to connect. Please try again."),
+        );
+      }
     });
-
-    if (error) {
-      console.error(JSON.stringify(error, null, 2));
-      return;
-    }
-
-    await signUp.verifications.sendEmailCode();
   };
 
   const onVerifyCodePress = async ({
     verificationCode,
   }: verificationCodeFormSchemaType) => {
-    await signUp.verifications.verifyEmailCode({ code: verificationCode });
-
-    if (signUp.status === "complete") {
-      await signUp.finalize({
-        navigate: ({ session, decorateUrl }) => {
-          if (session?.currentTask) return;
-          router.replace(decorateUrl("/") as any);
-        },
-      });
-    } else {
-      console.error("Sign-up attempt not complete:", signUp);
+    const code = verificationCode.trim();
+    if (!/^\d{6}$/.test(code)) {
+      setVerificationError("Enter the 6-digit verification code.");
+      return;
     }
+
+    await runAuthRequest(async () => {
+      setVerificationError(undefined);
+
+      try {
+        const { error } = await signUp.verifications.verifyEmailCode({ code });
+
+        if (error) {
+          resetVerificationCodeField("verificationCode");
+          setVerificationError(
+            getClerkErrorMessage(
+              error,
+              "That code isn't valid. Check it and try again.",
+            ),
+          );
+          return;
+        }
+
+        if (signUp.status === "complete") {
+          const { error: finalizeError } = await signUp.finalize({
+            navigate: ({ session, decorateUrl }) => {
+              if (session?.currentTask) return;
+              router.replace(decorateUrl("/") as any);
+            },
+          });
+
+          if (finalizeError) {
+            setVerificationError(
+              getClerkErrorMessage(
+                finalizeError,
+                "Unable to complete sign up. Please try again.",
+              ),
+            );
+          }
+        } else {
+          setVerificationError(
+            "Verification isn't complete yet. Please try again.",
+          );
+        }
+      } catch (error) {
+        setVerificationError(
+          getClerkErrorMessage(error, "Unable to connect. Please try again."),
+        );
+      }
+    });
   };
 
   const onResendVerificationCodePress = async () => {
-    await signUp.verifications.sendEmailCode();
+    const didResend = await runAuthRequest(async () => {
+      setVerificationError(undefined);
+
+      try {
+        const { error } = await signUp.verifications.sendEmailCode();
+        if (error) {
+          setVerificationError(
+            getClerkErrorMessage(
+              error,
+              "We couldn't send a new code. Please try again.",
+            ),
+          );
+          return false;
+        }
+
+        resetVerificationCodeField("verificationCode");
+        return true;
+      } catch (error) {
+        setVerificationError(
+          getClerkErrorMessage(error, "Unable to connect. Please try again."),
+        );
+        return false;
+      }
+    });
+
+    return didResend ?? false;
   };
 
   if (signUp.status === "complete" || isSignedIn) return null;
@@ -120,149 +233,162 @@ export default function SignUpScreen() {
         email={email}
         control={verificationCodeControl}
         error={verificationCodeErrors.verificationCode?.message}
-        clerkError={errors.fields.code?.message}
+        clerkError={verificationError || errors.fields.code?.message}
         isLoading={isLoading}
         onVerify={handleVerificationCodeSubmit(onVerifyCodePress)}
         onResend={onResendVerificationCodePress}
-        onReset={() => signUp.reset()}
+        onBack={() => {
+          setVerificationError(undefined);
+          signUp.reset();
+        }}
       />
     );
   }
 
   return (
     <AuthWrapper>
-      <StatusBar style="light" backgroundColor={COLORS.primary} />
+      <StatusBar style="light" backgroundColor={FYNLO_COLORS.canvas} />
       <ScrollView
         ref={scrollViewRef}
-        className="flex-1 bg-brand-primary"
-        contentContainerClassName="flex-grow"
+        className="flex-1 bg-fynlo-canvas"
+        contentContainerClassName="flex-grow px-fynlo-page"
+        contentContainerStyle={{
+          paddingTop: insets.top + 14,
+          paddingBottom: Math.max(insets.bottom, 32),
+        }}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
       >
-        <View
-          className="h-[390px] px-6"
-          style={{ paddingTop: insets.top + 14 }}
-        >
-          <TouchableOpacity
-            onPress={() => router.back()}
-            className="h-10 flex-row items-center"
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-          >
-            <Ionicons name="chevron-back" size={25} color="white" />
-            <Text className="ml-2 font-poppins-medium text-[16px] text-white">
-              Back
-            </Text>
-          </TouchableOpacity>
-          <Text className="mt-3 font-poppins-semibold text-[24px] leading-[32px] text-white">
-            Start building better money habits.
+        <AuthTopBar onBack={() => router.back()} />
+
+        <View className="mt-fynlo-form-offset">
+          <Text className="font-poppins-semibold text-fynlo-display text-fynlo-text-primary">
+            Create your account.
           </Text>
-          <Text className="mt-2 w-[230px] font-poppins-regular text-[14px] leading-5 text-white/80">
-            Create your account and take charge of every rupee.
+          <Text className="mt-3 max-w-[320px] font-poppins-regular text-fynlo-body text-fynlo-text-secondary">
+            Set up Fynlo and take control of every rupee.
           </Text>
-          <View className="absolute bottom-0 left-0 right-0 h-[200px] items-end justify-end">
-            <Image
-              source={require("../../assets/images/signup-illustration.png")}
-              resizeMode="contain"
-              className="h-[230px] w-[260px]"
-              accessibilityLabel="A person setting up a rupee budget"
-            />
-          </View>
         </View>
 
-        <View className="-mt-4 flex-1 rounded-t-[30px] bg-white px-6 pb-8 pt-5">
-          <View className="mb-4 items-center gap-1">
-            <Text className="text-center font-poppins-semibold text-[24px] leading-8 text-brand-text-primary">
-              Create account
-            </Text>
-            <Text className="text-center font-poppins-regular text-[12px] leading-5 text-brand-text-secondary">
-              Set up Fynlo and start managing your money.
-            </Text>
-          </View>
-
-          <View className="mt-6 gap-2">
-            <View className="flex-row gap-3">
-              <View className="flex-1">
-                <AuthInput
-                  control={control}
-                  name="firstName"
-                  placeholder="First name"
-                  autoCapitalize="words"
-                  icon="person-outline"
-                  disableAutofill
-                  onFocus={scrollToActiveField}
-                  error={formErrors.firstName?.message}
-                  className="h-[46px] rounded-full border-brand-border px-3 font-poppins-regular text-[14px] text-brand-text-primary"
-                />
-              </View>
-              <View className="flex-1">
-                <AuthInput
-                  control={control}
-                  name="lastName"
-                  placeholder="Last name"
-                  autoCapitalize="words"
-                  icon="person-outline"
-                  disableAutofill
-                  onFocus={scrollToActiveField}
-                  error={formErrors.lastName?.message}
-                  className="h-[46px] rounded-full border-brand-border px-3 font-poppins-regular text-[14px] text-brand-text-primary"
-                />
-              </View>
+        <View className="mt-10">
+          <Text className="mb-2 font-poppins-medium text-fynlo-label text-fynlo-text-secondary">
+            Your name
+          </Text>
+          <View className="flex-row gap-3">
+            <View className="flex-1">
+              <AuthInput
+                control={control}
+                name="firstName"
+                placeholder="First name"
+                autoCapitalize="words"
+                icon="account-outline"
+                autoComplete="given-name"
+                inputRef={firstNameInputRef}
+                returnKeyType="next"
+                onFocus={() =>
+                  scrollFocusedInputIntoView(firstNameInputRef.current)
+                }
+                onSubmitEditing={() => lastNameInputRef.current?.focus()}
+                error={formErrors.firstName?.message}
+                submitBehavior="submit"
+              />
             </View>
-            <AuthInput
-              control={control}
-              name="email"
-              placeholder="Email address"
-              autoCapitalize="none"
-              keyboardType="email-address"
-              icon="mail-outline"
-              disableAutofill
-              onFocus={scrollToActiveField}
-              error={
-                formErrors.email?.message || errors.fields.emailAddress?.message
-              }
-              className="h-[46px] rounded-full border-brand-border px-3 font-poppins-regular text-[14px] text-brand-text-primary"
-            />
-            <AuthInput
-              control={control}
-              name="password"
-              placeholder="Password"
-              secureTextEntry
-              icon="lock-closed-outline"
-              disableAutofill
-              onFocus={scrollToActiveField}
-              error={
-                formErrors.password?.message || errors.fields.password?.message
-              }
-              className="h-[46px] rounded-full border-brand-border px-3 font-poppins-regular text-[14px] text-brand-text-primary"
-            />
+            <View className="flex-1">
+              <AuthInput
+                control={control}
+                name="lastName"
+                placeholder="Last name"
+                autoCapitalize="words"
+                icon="account-outline"
+                autoComplete="family-name"
+                inputRef={lastNameInputRef}
+                returnKeyType="next"
+                onFocus={() =>
+                  scrollFocusedInputIntoView(lastNameInputRef.current)
+                }
+                onSubmitEditing={() => emailInputRef.current?.focus()}
+                error={formErrors.lastName?.message}
+                submitBehavior="submit"
+              />
+            </View>
           </View>
 
-          <View className="mt-4 gap-4">
+          <Text className="mb-2 mt-5 font-poppins-medium text-fynlo-label text-fynlo-text-secondary">
+            Email address
+          </Text>
+          <AuthInput
+            control={control}
+            name="email"
+            placeholder="you@example.com"
+            autoCapitalize="none"
+            keyboardType="email-address"
+            icon="email-outline"
+            autoComplete="email"
+            inputRef={emailInputRef}
+            returnKeyType="next"
+            submitBehavior="submit"
+            onFocus={() => scrollFocusedInputIntoView(emailInputRef.current)}
+            onSubmitEditing={() => passwordInputRef.current?.focus()}
+            error={
+              formErrors.email?.message || errors.fields.emailAddress?.message
+            }
+          />
+
+          <Text className="mb-2 mt-5 font-poppins-medium text-fynlo-label text-fynlo-text-secondary">
+            Password
+          </Text>
+          <AuthInput
+            control={control}
+            name="password"
+            placeholder="Create a password"
+            secureTextEntry
+            autoCapitalize="none"
+            icon="lock-outline"
+            autoComplete="new-password"
+            inputRef={passwordInputRef}
+            returnKeyType="done"
+            submitBehavior="blurAndSubmit"
+            onFocus={() => scrollFocusedInputIntoView(passwordInputRef.current)}
+            onSubmitEditing={handleSubmit(onSignUpPress)}
+            error={
+              formErrors.password?.message || errors.fields.password?.message
+            }
+          />
+
+          {formError && (
+            <Text
+              accessibilityRole="alert"
+              className="mt-3 font-poppins-regular text-fynlo-caption text-fynlo-error"
+            >
+              {formError}
+            </Text>
+          )}
+
+          <View className="mt-7 gap-5">
             <AuthButton
               label="Sign up"
               onPress={handleSubmit(onSignUpPress)}
               isLoading={isLoading}
             />
-            <View className="mt-4 flex-row items-center gap-3">
-              <View className="h-px flex-1 bg-brand-border-soft" />
-              <Text className="font-poppins-regular text-[12px] text-brand-text-secondary">
+
+            <View className="flex-row items-center gap-3">
+              <View className="h-px flex-1 bg-fynlo-divider" />
+              <Text className="font-poppins-regular text-fynlo-label text-fynlo-text-muted">
                 Or continue with
               </Text>
-              <View className="h-px flex-1 bg-brand-border-soft" />
+              <View className="h-px flex-1 bg-fynlo-divider" />
             </View>
             <HostedAuthButton mode="sign-up" />
-          </View>
 
-          <View className="mt-auto items-center pt-8">
             <AuthFooter
-              label="Already have an account ?"
-              linkText="Sign In"
+              label="Already have an account?"
+              linkText="Sign in"
               href="/sign-in"
             />
           </View>
-          <View nativeID="clerk-captcha" />
         </View>
+
+        <View nativeID="clerk-captcha" />
       </ScrollView>
     </AuthWrapper>
   );
