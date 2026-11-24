@@ -14,7 +14,9 @@ export function createClerkSupabaseClient(
 ) {
   return createClient(supabaseurl, supabaseAnonKey, {
     async accessToken() {
-      return getToken();
+      const token = await getToken();
+      if (!token) throw new Error("Your sign-in session is not ready. Please retry.");
+      return token;
     },
   });
 }

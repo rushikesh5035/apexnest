@@ -1,82 +1,37 @@
 import { useSupabase } from "@/hooks/useSupabase";
-import { useUserStore } from "@/store/userStore";
-import { useUser } from "@clerk/expo";
-import { useEffect } from "react";
+import { querykeys } from "@/lib/query/keys";
+import { useAuth, useUser } from "@clerk/expo";
+import { useQuery } from "@tanstack/react-query";
 
-export const useUserSync = () => {
-  const { user } = useUser();
-  const setCurrency = useUserStore((state) => state.setCurrency);
-  const setNeedsOnboarding = useUserStore((state) => state.setNeedsOnboarding);
-  const authSupabase = useSupabase();
-
-  useEffect(() => {
-    if (!user) return;
-
-    const syncUser = async () => {
-      try {
-        const { data: existingUser, error: fetchError } = await authSupabase
-          .from("users")
-          .select("clerk_id, currency")
-          .eq("clerk_id", user.id)
-          .single();
-
-        if (fetchError && fetchError.code !== "PGRST116") {
-          console.error("Error fetching user:", fetchError);
-          setNeedsOnboarding(true);
-          return;
+export function useUserSync() {
+  const { user, isLoaded } = useUser();
+  const { isSignedIn, userId, sessionClaims } = useAuth();
+  const client = useSupabase();
+  return useQuery({
+    queryKey: querykeys.onboarding(user?.id),
+    enabled: isLoaded && !!isSignedIn && !!user && user.id === userId,
+    staleTime: Infinity,
+    queryFn: async () => {
+      if (!user) throw new Error("Sign in required");
+      const email = user.primaryEmailAddress?.emailAddress ?? user.emailAddresses[0]?.emailAddress;
+      if (!email) throw new Error("This account needs an email address to finish setup.");
+      const { data, error, status } = await client.rpc("sync_onboarding", {
+        profile_email: email,
+        profile_name: user.fullName ?? "",
+        profile_image: user.imageUrl,
+      });
+      if (error) {
+        const reference = error.code || (status ? `HTTP ${status}` : "NETWORK");
+        if (__DEV__ && error.code === "42501") {
+          const role = sessionClaims?.role;
+          const sessionRole = typeof role === "string" ? role : "missing";
+          throw new Error(`Account sync failed (42501, HTTP ${status}): ${error.message}. Clerk session role: ${sessionRole}.`);
         }
-
-        if (existingUser) {
-          setCurrency(existingUser.currency ?? "INR");
-          setNeedsOnboarding(!existingUser.currency);
-          return;
-        }
-
-        const email = user.emailAddresses[0].emailAddress;
-          
-        const { data: newUser, error: insertError } = await authSupabase
-          .from("users")
-          .upsert(
-            {
-              clerk_id: user.id,
-              email,
-              name: `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim(),
-              image_url: user.imageUrl,
-            },
-            { onConflict: "clerk_id", ignoreDuplicates: false },
-          )
-          .select("currency")
-          .single();
-
-        if (insertError) {
-          console.error("Error upserting user:", insertError);
-          setNeedsOnboarding(true);
-          return;
-        }
-
-        setCurrency(newUser?.currency ?? "INR");
-        setNeedsOnboarding(!newUser?.currency);
-
-        // Create a default account for the new user if they don't have one
-        const { error: accountError } = await authSupabase
-          .from("accounts")
-          .insert({
-            user_id: user.id,
-            name: "Cash",
-            type: "CASH",
-            balance: 0,
-            is_default: true,
-          });
-
-        if (accountError) {
-          console.error("Error creating default account:", accountError);
-        }
-      } catch (e) {
-        console.error("Unexpected sync error:", e);
-        setNeedsOnboarding(true);
+        throw new Error(`Account sync failed (${reference}).`);
       }
-    };
-
-    syncUser();
-  }, [user?.id]);
-};
+      if (typeof data !== "boolean")
+        throw new Error("Could not load onboarding status");
+      return data;
+    },
+  });
+}

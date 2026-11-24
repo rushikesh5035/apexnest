@@ -7,7 +7,7 @@ export function useSupabase() {
 
   const client = useMemo(
     () => createClerkSupabaseClient(() => getToken()),
-    [], // empty deps - create the client once, getToken is captured in the closure
+    [getToken],
   );
 
   return client;

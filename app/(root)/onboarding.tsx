@@ -6,7 +6,8 @@ import {
   OnboardingFormSchemaType,
   onboardingSchema,
 } from "@/lib/schemas/onboarding";
-import { useUserStore } from "@/store/userStore";
+import { querykeys } from "@/lib/query/keys";
+import { useQueryClient } from "@tanstack/react-query";
 import { useUser } from "@clerk/expo";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "expo-router";
@@ -23,13 +24,10 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const INDIAN_RUPEE = "INR";
-
 export default function OnboardingScreen() {
   const { user } = useUser();
   const authSupabase = useSupabase();
-  const setCurrency = useUserStore((state) => state.setCurrency);
-  const setNeedsOnboarding = useUserStore((state) => state.setNeedsOnboarding);
+  const queryClient = useQueryClient();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [focused, setFocused] = useState(false);
@@ -49,54 +47,21 @@ export default function OnboardingScreen() {
   const handleSave = async ({ startingBalance }: OnboardingFormSchemaType) => {
     if (!user || saving) return;
 
-    const parsedBalance = Number.parseFloat(startingBalance.replace(/,/g, ""));
     setSaving(true);
     setError("");
 
     try {
-      const { error: updateError } = await authSupabase
-        .from("users")
-        .update({ currency: INDIAN_RUPEE })
-        .eq("clerk_id", user.id);
-
-      if (updateError) throw updateError;
-
-      const { data: defaultAccount, error: accountFetchError } =
-        await authSupabase
-          .from("accounts")
-          .select("id, balance")
-          .eq("user_id", user.id)
-          .eq("is_default", true)
-          .single();
-
-      if (accountFetchError || !defaultAccount) {
-        throw accountFetchError ?? new Error("Default account not found");
-      }
-
-      const { error: transactionError } = await authSupabase
-        .from("transactions")
-        .insert({
-          user_id: user.id,
-          account_id: defaultAccount.id,
-          type: "INCOME",
-          amount: parsedBalance,
-          category: "other_income",
-          description: "Starting balance",
-          date: new Date().toISOString(),
-          input_method: "MANUAL",
-        });
-
-      if (transactionError) throw transactionError;
-
-      const { error: balanceError } = await authSupabase
-        .from("accounts")
-        .update({ balance: defaultAccount.balance + parsedBalance })
-        .eq("id", defaultAccount.id);
-
-      if (balanceError) throw balanceError;
-
-      setCurrency(INDIAN_RUPEE);
-      setNeedsOnboarding(false);
+      const { error } = await authSupabase.rpc("complete_onboarding", {
+        opening_amount: startingBalance.replace(/,/g, ""),
+      });
+      if (error) throw error;
+      queryClient.setQueryData(querykeys.onboarding(user.id), true);
+      void queryClient.invalidateQueries({
+        queryKey: querykeys.accounts(user.id),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["transactions", user.id],
+      });
       router.replace("/(root)/(tabs)");
     } catch (saveError) {
       console.error("Unable to save onboarding details:", saveError);
