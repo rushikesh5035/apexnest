@@ -1,13 +1,9 @@
-import { KeyboardAvoidingView } from "react-native";
+import { View } from "react-native";
 
 export default function AuthWrapper({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return (
-    <KeyboardAvoidingView behavior="padding" className="flex-1 bg-brand-body">
-      {children}
-    </KeyboardAvoidingView>
-  );
+  return <View className="flex-1 bg-fynlo-canvas">{children}</View>;
 }
