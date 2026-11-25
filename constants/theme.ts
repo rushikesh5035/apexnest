@@ -9,6 +9,7 @@ export const FYNLO_COLORS = {
   borderStrong: "#252525",
   divider: "#252525",
   primary: "#AAFF21",
+  insightGreen: "#7BDB54",
   onPrimary: "#000000",
   secondary: "#EF9204",
   onSecondary: "#000000",

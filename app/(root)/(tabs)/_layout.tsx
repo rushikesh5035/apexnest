@@ -1,47 +1,116 @@
-import { Feather } from "@expo/vector-icons";
+import { FYNLO_COLORS as colors, FYNLO_RADIUS } from "@/constants/theme";
+import type { BottomTabBarButtonProps } from "@react-navigation/bottom-tabs";
+import { PlatformPressable } from "@react-navigation/elements";
+import {
+  IconCreditCardFilled,
+  IconHomeFilled,
+  IconSparklesFilled,
+  IconSquareRoundedPlusFilled,
+  IconUserFilled,
+} from "@tabler/icons-react-native";
 import { Tabs } from "expo-router";
 import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
-import React from "react";
-import { Platform } from "react-native";
 
-const useNativeTabs = Platform.OS === "ios";
+import { Platform, View } from "react-native";
+import Animated, {
+  Easing,
+  ReduceMotion,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+const tabs = [
+  { name: "index", title: "Home", glyph: IconHomeFilled, symbol: "house.fill" },
+  {
+    name: "transactions",
+    title: "Transactions",
+    glyph: IconCreditCardFilled,
+    symbol: "creditcard.fill",
+  },
+  {
+    name: "add-transaction",
+    title: "Add transaction",
+    glyph: IconSquareRoundedPlusFilled,
+    symbol: "plus.square.fill",
+  },
+  {
+    name: "assistant",
+    title: "AI Assistant",
+    glyph: IconSparklesFilled,
+    symbol: "sparkles",
+  },
+  {
+    name: "profile",
+    title: "Profile",
+    glyph: IconUserFilled,
+    symbol: "person.fill",
+  },
+] as const;
+
+const pressTiming = {
+  duration: 120,
+  easing: Easing.out(Easing.quad),
+  reduceMotion: ReduceMotion.System,
+};
+
+function TabButton({
+  children,
+  onPressIn,
+  onPressOut,
+  ...props
+}: BottomTabBarButtonProps) {
+  const scale = useSharedValue(1);
+  const feedback = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  return (
+    <PlatformPressable
+      {...props}
+      onPressIn={(event) => {
+        scale.value = withTiming(0.97, pressTiming);
+        onPressIn?.(event);
+      }}
+      onPressOut={(event) => {
+        scale.value = withTiming(1, pressTiming);
+        onPressOut?.(event);
+      }}
+    >
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          {
+            flex: 1,
+            width: "100%",
+            alignItems: "center",
+            justifyContent: "center",
+          },
+          feedback,
+        ]}
+      >
+        {children}
+      </Animated.View>
+    </PlatformPressable>
+  );
+}
 
 export default function TabLayout() {
-  if (useNativeTabs) {
+  const insets = useSafeAreaInsets();
+  if (Platform.OS === "ios") {
     return (
       <NativeTabs
-        backgroundColor="#0B0E14"
-        tintColor="4A9EFF"
-        iconColor={{ default: "#5C5F68", selected: "#4A9EFF" }}
-        labelStyle={{
-          default: { color: "#5C5F68" },
-          selected: { color: "#4A9EFF" },
-        }}
+        backgroundColor={colors.surface}
+        tintColor={colors.primary}
+        iconColor={{ default: colors.textSecondary, selected: colors.primary }}
       >
-        <NativeTabs.Trigger name="index">
-          <Label>Home</Label>
-          <Icon sf="house.fill" />
-        </NativeTabs.Trigger>
-
-        <NativeTabs.Trigger name="Transactions">
-          <Icon sf="list.bullet" />
-          <Label>Transactions</Label>
-        </NativeTabs.Trigger>
-
-        <NativeTabs.Trigger name="add-transaction">
-          <Icon sf="plus.circle.fill" />
-          <Label>Add</Label>
-        </NativeTabs.Trigger>
-
-        <NativeTabs.Trigger name="assistant">
-          <Icon sf="brain.head.profile" />
-          <Label>Assistant</Label>
-        </NativeTabs.Trigger>
-
-        <NativeTabs.Trigger name="profile">
-          <Icon sf="person.fill" />
-          <Label>Profile</Label>
-        </NativeTabs.Trigger>
+        {tabs.map(({ name, title, symbol }) => (
+          <NativeTabs.Trigger key={name} name={name}>
+            <Label hidden>{title}</Label>
+            <Icon sf={symbol} />
+          </NativeTabs.Trigger>
+        ))}
       </NativeTabs>
     );
   }
@@ -50,61 +119,52 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: "#4A9EFF",
-        tabBarInactiveTintColor: "#5C5F68",
+        animation: "none",
+        tabBarShowLabel: false,
+        tabBarHideOnKeyboard: true,
+        tabBarButton: (props) => <TabButton {...props} />,
         tabBarStyle: {
-          backgroundColor: "#FFFFFF",
-          borderTopColor: "#E8E6DF",
-          paddingTop: 4,
-          height: 70,
+          backgroundColor: colors.canvas,
+          borderTopWidth: 0,
+          elevation: 0,
+          height: 68 + insets.bottom,
+          paddingTop: 6,
+          paddingBottom: insets.bottom + 8,
+          paddingHorizontal: 16,
         },
       }}
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: "Home",
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="home" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="transactions"
-        options={{
-          title: "Transactions",
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="list" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="add-transaction"
-        options={{
-          title: "Add",
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="plus-circle" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="assistant"
-        options={{
-          title: "Assistant",
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="cpu" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: "Profile",
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="user" size={size} color={color} />
-          ),
-        }}
-      />
+      {tabs.map(({ name, title, glyph: Glyph }, index) => (
+        <Tabs.Screen
+          key={name}
+          name={name}
+          options={{
+            title,
+            tabBarAccessibilityLabel: title,
+            tabBarItemStyle: {
+              backgroundColor: colors.surface,
+              borderTopLeftRadius: index === 0 ? FYNLO_RADIUS.pill : 0,
+              borderBottomLeftRadius: index === 0 ? FYNLO_RADIUS.pill : 0,
+              borderTopRightRadius:
+                index === tabs.length - 1 ? FYNLO_RADIUS.pill : 0,
+              borderBottomRightRadius:
+                index === tabs.length - 1 ? FYNLO_RADIUS.pill : 0,
+              overflow: "hidden",
+            },
+            tabBarIconStyle: { width: "100%", height: "100%" },
+            tabBarIcon: ({ focused }) => (
+              <View
+                className={`h-12 w-14 items-center justify-center rounded-full ${focused ? "bg-fynlo-primary" : ""}`}
+              >
+                <Glyph
+                  size={28}
+                  color={focused ? colors.onPrimary : colors.textSecondary}
+                />
+              </View>
+            ),
+          }}
+        />
+      ))}
     </Tabs>
   );
 }

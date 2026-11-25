@@ -1,8 +1,9 @@
-import { COLORS } from "@/constants/theme";
+import AuthButton from "@/components/auth/AuthButton";
+import { FYNLO_COLORS } from "@/constants/theme";
 import { useUpsertBudget } from "@/hooks/mutations/useBudgetMutations";
 import { Budget } from "@/lib/services/budgets";
 import React, { useEffect, useState } from "react";
-import { Text, TextInput, TouchableOpacity } from "react-native";
+import { Text, TextInput } from "react-native";
 import FormSheetModal from "./form-sheet-modal";
 
 export default function BudgetModal({
@@ -49,12 +50,13 @@ export default function BudgetModal({
 
   return (
     <FormSheetModal
+      dark
       visible={visible}
       title={budget ? "Edit monthly budget" : "Set monthly budget"}
       onClose={onClose}
     >
-      <Text className="text-brand-bg text-xs font-medium mb-1.5">
-        Monthy budget
+      <Text className="font-poppins-medium text-fynlo-label text-fynlo-text-secondary mb-1.5">
+        Amount in rupees
       </Text>
 
       <TextInput
@@ -64,26 +66,18 @@ export default function BudgetModal({
           setAmount(v);
         }}
         placeholder="e.g. 50000"
-        placeholderTextColor={COLORS.placeholder}
+        accessibilityLabel="Monthly budget in rupees"
+        placeholderTextColor={FYNLO_COLORS.placeholder}
         keyboardType="numeric"
         autoFocus
-        className="bg-white border border-[#E8E6DF] rounded-xl px-4 py-3.5 mb-5 text-sm text-brand-bg"
+        className="bg-fynlo-canvas border border-fynlo-border rounded-xl px-4 py-3 mb-5 font-poppins-medium text-fynlo-body text-fynlo-text-primary"
       />
 
       {error ? (
         <Text className="text-brand-coral text-xs mb-3">{error}</Text>
       ) : null}
 
-      <TouchableOpacity
-        onPress={handleSave}
-        disabled={saving}
-        className="bg-brand-bg rounded-xl py-4 items-center mb-3"
-        activeOpacity={0.85}
-      >
-        <Text className="text-white text-sm font-semibold">
-          {saving ? "saving..." : "Save budget"}
-        </Text>
-      </TouchableOpacity>
+      <AuthButton label="Save budget" onPress={handleSave} isLoading={saving} />
     </FormSheetModal>
   );
 }

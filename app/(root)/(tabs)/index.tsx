@@ -1,56 +1,20 @@
 import BudgetModal from "@/components/common/budget-modal";
-import TransactionRow from "@/components/tabs/home/transaction-row";
-import { getCategoryConfig } from "@/constants/categories";
+import AiInsightCard from "@/components/tabs/home/ai-insight-card";
+import BalanceCard from "@/components/tabs/home/balance-card";
+import HomeHeader from "@/components/tabs/home/home-header";
+import MonthlyTotals from "@/components/tabs/home/monthly-totals";
+import RecentActivity from "@/components/tabs/home/recent-activity";
 import { useAccountsQuery } from "@/hooks/queries/useAccountsQuery";
 import { useBudgetQuery } from "@/hooks/queries/useBudgetQuery";
 import { useTransactionsQuery } from "@/hooks/queries/useTransactionsQuery";
-import { Transaction } from "@/lib/services/transactions";
 import { formatPrice } from "@/lib/utils";
 import { useUser } from "@clerk/expo";
-import { Feather } from "@expo/vector-icons";
 import { isSameMonth } from "date-fns";
 import { useRouter } from "expo-router";
-import React, { useMemo, useState } from "react";
-import {
-  ActivityIndicator,
-  Image,
-  RefreshControl,
-  ScrollView,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
-
-import { PieChart } from "react-native-gifted-charts";
+import { StatusBar } from "expo-status-bar";
+import { useMemo, useState } from "react";
+import { Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-
-function getGreeting() {
-  const hour = new Date().getHours();
-  if (hour < 12) return "Good morning";
-  if (hour < 18) return "Good afternoon";
-  return "Good evening";
-}
-
-const QUICK_ACTIONS = [
-  {
-    icon: "camera",
-    label: "AI Receipt Scan",
-    action: "scan",
-    color: "#1A85FF",
-  },
-  {
-    icon: "mic",
-    label: "Voice Entry",
-    action: "voice",
-    color: "#FF6B4A",
-  },
-  {
-    icon: "plus",
-    label: "Add Manually",
-    action: "manual",
-    color: "#3DDC84",
-  },
-] as const;
 
 export default function HomeScreen() {
   const { user } = useUser();
@@ -61,6 +25,7 @@ export default function HomeScreen() {
   const {
     data: accounts = [],
     isLoading: accountLoading,
+    isError: accountError,
     isRefetching: accountRefetching,
     refetch: refetchAccounts,
   } = useAccountsQuery();
@@ -68,11 +33,17 @@ export default function HomeScreen() {
   const {
     data: transactions = [],
     isLoading: transactionsLoading,
+    isError: transactionError,
     isRefetching: transactionsRefetching,
     refetch: refetchTransactions,
   } = useTransactionsQuery();
 
-  const { data: budget = null, refetch: refetchBudget } = useBudgetQuery();
+  const {
+    data: budget = null,
+    isError: budgetError,
+    isLoading: budgetLoading,
+    refetch: refetchBudget,
+  } = useBudgetQuery();
 
   const loading = accountLoading || transactionsLoading;
   const refreshing = accountRefetching || transactionsRefetching;
@@ -88,15 +59,11 @@ export default function HomeScreen() {
     [accounts],
   );
 
-  // return
   const monthTransactions = useMemo(() => {
     const now = new Date();
     return transactions.filter((tx) => isSameMonth(new Date(tx.date), now));
   }, [transactions]);
 
-  // console.log(totalBalance, monthTransactions);
-
-  // monthly income
   const monthIncome = useMemo(
     () =>
       monthTransactions
@@ -105,7 +72,6 @@ export default function HomeScreen() {
     [monthTransactions],
   );
 
-  // monthly expenses
   const monthExpense = useMemo(
     () =>
       monthTransactions
@@ -114,266 +80,69 @@ export default function HomeScreen() {
     [monthTransactions],
   );
 
-  // top 5 transactions
-  const recentTransactions = useMemo(
-    () => transactions.slice(0, 5),
-    [transactions],
-  );
+  const totalsUnavailable = transactionsLoading || transactionError;
+  const openTransactions = () => router.push("/(root)/(tabs)/transactions");
 
-  // expense Breakdown -- display pie charts
-  const expenseBreakdown = useMemo(() => {
-    // create empty map
-    const map: Record<string, number> = {};
-
-    // filter out monthly transaction by expense
-    monthTransactions
-      .filter((tx) => tx.type === "EXPENSE")
-      .forEach((tx) => {
-        map[tx.category] = (map[tx.category] ?? 0) + tx.amount;
-      });
-
-    //
-    return Object.entries(map)
-      .sort((a, b) => b[1] - a[1])
-      .map(([category, amount]) => ({
-        category: category as Transaction["category"],
-        amount,
-        color: getCategoryConfig(category as Transaction["category"]).color,
-      }));
-  }, [monthTransactions]);
+  const unavailable = accountError || transactionError || budgetError;
+  const balance =
+    accountLoading || accountError ? "—" : formatPrice(totalBalance);
 
   return (
-    <SafeAreaView className="flex-1 bg-brand-body">
-      <ScrollView
-        className="flex-1 bg-brand-body"
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-      >
-        {/* Dark hero header */}
-        <View className="bg-brand-bg rounded-b-[28px] px-5 pt-5 pb-[22px]">
-          <View className="flex-row justify-between items-center mb-[22px]">
-            {/* left side */}
-            <Image
-              source={require("../../../assets/images/apexnest-light.png")}
-              style={{ width: 125, height: 50 }}
-              resizeMode="cover"
-            />
-
-            {/* Right side */}
-            <View className="flex-row items-center gap-2.5">
-              <View className="items-end">
-                <Text className="text-brand-text-secondary text-xs">
-                  {getGreeting()}
-                </Text>
-                <Text className="text-brand-text-primary text-base font-medium">
-                  {user?.firstName ?? "there"}
-                </Text>
-              </View>
-
-              <TouchableOpacity
-                onPress={() => router.push("/(root)/(tabs)/profile")}
-                className="w-[38px] h-[38px] rounded-full bg-[#1A1D26] items-center justify-center overflow-hidden"
-              >
-                {user?.imageUrl && user.hasImage ? (
-                  <Image
-                    source={{ uri: user.imageUrl }}
-                    style={{ width: 38, height: 38 }}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <Feather name="user" size={18} color="#8A8D96" />
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/*  */}
-          <View className="mb-[22px]">
-            <Text className="text-brand-text-secondary text-[13px]">
-              Total balance
-            </Text>
-            <Text className="text-brand-text-primary text-[25px] font-medium tracking-tight">
-              {formatPrice(totalBalance)}
-            </Text>
-
-            <View className="flex-row gap-3.5 mt-1.5">
-              <View className="flex-row items-center gap-1.5">
-                <Feather name="arrow-up-right" size={14} color="#3DDC84" />
-                <Text className="text-brand-success text-[13px]">
-                  {formatPrice(monthIncome)}
-                </Text>
-              </View>
-
-              <View className="flex-row items-center gap-1.5">
-                <Feather name="arrow-down-right" size={14} color="#FF6B4A" />
-                <Text className="text-brand-coral text-[13px]">
-                  {formatPrice(monthExpense)}
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          {/*  */}
-          <View className="flex-row gap-2.5">
-            {QUICK_ACTIONS.map((action) => (
-              <TouchableOpacity
-                key={action.label}
-                onPress={() =>
-                  router.push({
-                    pathname: "/(root)/(tabs)/add-transaction",
-                    params: { action: action.action },
-                  })
-                }
-                activeOpacity={0.75}
-                className="flex-1 bg-brand-surface rounded-2xl border border-brand-surface-border py-4 items-center gap-2"
-              >
-                <View
-                  className="w-9 h-9 rounded-full items-center justify-center"
-                  style={{ backgroundColor: `${action.color}26` }}
-                >
-                  <Feather name={action.icon} size={17} color={action.color} />
-                </View>
-                <Text className="text-[#B8BAC2] text-[11px] font-medium text-center">
-                  {action.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* Light body */}
-        <View className="px-5 pt-[18px] pb-5">
+    <SafeAreaView
+      edges={["top", "left", "right"]}
+      className="flex-1 bg-fynlo-canvas"
+    >
+      <StatusBar style="light" />
+      <View className="flex-1 px-4 pt-3">
+        <HomeHeader
+          firstName={user?.firstName}
+          avatarUrl={user?.hasImage ? user.imageUrl : undefined}
+          budgetDisabled={budgetError || budgetLoading}
+          onProfile={() => router.push("/(root)/(tabs)/profile")}
+          onSearch={openTransactions}
+          onBudget={() => setBudgetModalOpen(true)}
+        />
+        <BalanceCard
+          balance={balance}
+          monthIncome={monthIncome}
+          monthExpense={monthExpense}
+          totalsUnavailable={totalsUnavailable}
+          onTransactions={openTransactions}
+          onAction={(action) =>
+            router.push({
+              pathname: "/(root)/(tabs)/add-transaction",
+              params: { action },
+            })
+          }
+        />
+        <MonthlyTotals
+          monthIncome={monthIncome}
+          monthExpense={monthExpense}
+          totalsUnavailable={totalsUnavailable}
+        />
+        <AiInsightCard
+          onPress={() => router.push("/(root)/(tabs)/assistant")}
+        />
+        <RecentActivity
+          transactions={transactions}
+          loading={loading}
+          transactionError={transactionError}
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          onSeeAll={openTransactions}
+        />
+        {unavailable && (
           <TouchableOpacity
-            onPress={() => router.push("/(root)/(tabs)/assistant")}
-            className="bg-white rounded-[18px] border border-[#E8E6DF] p-3.5 flex-row items-center gap-2.5 mb-[18px]"
+            accessibilityRole="button"
+            onPress={onRefresh}
+            className="mt-5 py-3"
           >
-            <View className="w-[26px] h-[26px] rounded-full bg-[#4A9EFF1A] items-center justify-center">
-              <View className="w-[7px] h-[7px] rounded-full bg-brand-blue" />
-            </View>
-            <Text className="text-brand-text-muted text-[13px] flex-1">
-              Ask AI anything about your money
+            <Text className="font-poppins-medium text-fynlo-label text-fynlo-primary">
+              Some details couldn’t load. Tap to retry.
             </Text>
-            <Feather name="arrow-right" size={16} color="#4A9EFF" />
           </TouchableOpacity>
-
-          {/*  Monthly budget */}
-          <TouchableOpacity
-            onPress={() => setBudgetModalOpen(true)}
-            activeOpacity={0.85}
-            className="bg-white rounded-[18px] border border-[#E8E6DF] p-4 mb-[18px]"
-          >
-            <View className="flex-row items-center justify-between mb-2.5">
-              <Text className="text-[#1A1D26] text-sm font-medium">
-                Monthly budget
-              </Text>
-              <Feather name="edit-2" size={13} color="#8A8D96" />
-            </View>
-
-            {budget ? (
-              <>
-                <Text>
-                  {formatPrice(monthExpense)} of{" "}
-                  {formatPrice(budget.amount)} spent
-                </Text>
-                <View className="h-2 rounded-full bg-[#F0EEE7] overflow-hidden">
-                  <View
-                    className="h-2 rounded-full"
-                    style={{
-                      width: `${Math.min(
-                        Math.round((monthExpense / budget.amount) * 100),
-                        100,
-                      )}%`,
-                      backgroundColor:
-                        monthExpense >= budget.amount
-                          ? "#FF6B4A"
-                          : monthExpense >= budget.amount * 0.8
-                            ? "#F7DC6F"
-                            : "#3DDC84",
-                    }}
-                  />
-                </View>
-              </>
-            ) : (
-              <Text className="text-brand-text-secondary text-xs">
-                Tap to set a monthly spending budget
-              </Text>
-            )}
-          </TouchableOpacity>
-
-          {/* Monthly Expense breakdown Chart */}
-          {expenseBreakdown.length > 0 && (
-            <View className="bg-white rounded-[18px] border border-[#E8E6DF] p-4 mb-[18px]">
-              <Text className="text-[#1A1D26] text-sm font-medium mb-3">
-                Expense breakdown (this month)
-              </Text>
-              <View className="flex-row items-center">
-                <PieChart
-                  data={expenseBreakdown.map((c) => ({
-                    value: c.amount,
-                    color: c.color,
-                  }))}
-                  radius={60}
-                  innerRadius={38}
-                  innerCircleColor="#fff"
-                />
-                <View className="flex-1 ml-4 gap-1.5">
-                  {expenseBreakdown.slice(0, 6).map((c) => (
-                    <View
-                      key={c.category}
-                      className="flex-row items-center justify-between"
-                    >
-                      <View className="flex-row items-center gap-1.5">
-                        <View
-                          className="w-2 h-2 rounded-full"
-                          style={{ backgroundColor: c.color }}
-                        />
-                        <Text className="text-brand-text-secondary text-[11px]">
-                          {getCategoryConfig(c.category).label}
-                        </Text>
-                      </View>
-                      <Text className="text-brand-bg text-[11px] font-medium">
-                        {formatPrice(c.amount)}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            </View>
-          )}
-
-          {/* All the Recent transactions */}
-          <View className="flex-row justify-between items-center mb-3">
-            <Text className="text-[#1A1D26] text-sm font-medium">
-              Recent transactions
-            </Text>
-            <TouchableOpacity
-              onPress={() => router.push("/(root)/(tabs)/transactions")}
-            >
-              <Text className="text-brand-text-secondary text-xs">See all</Text>
-            </TouchableOpacity>
-          </View>
-
-          {loading ? (
-            <View className="items-center py-6">
-              <ActivityIndicator color="#4A9EFF" />
-            </View>
-          ) : recentTransactions.length === 0 ? (
-            <View className="items-center py-6">
-              <Feather name="inbox" size={28} color="#BDC3C7" />
-              <Text className="text-brand-text-muted text-sm mt-3">
-                No transactions yet
-              </Text>
-            </View>
-          ) : (
-            recentTransactions.map((tx) => (
-              <TransactionRow key={tx.id} tx={tx} />
-            ))
-          )}
-        </View>
-      </ScrollView>
-
+        )}
+      </View>
       {user && (
         <BudgetModal
           visible={budgetModalOpen}

@@ -1,4 +1,5 @@
 import { getCategoryConfig } from "@/constants/categories";
+import { FYNLO_COLORS as colors } from "@/constants/theme";
 import { Transaction } from "@/lib/services/transactions";
 import { formatPrice } from "@/lib/utils";
 import { Feather } from "@expo/vector-icons";
@@ -18,85 +19,87 @@ const INPUT_METHOD_ICON: Record<
 export default function TransactionRow({
   tx,
   onDelete,
+  appearance,
 }: {
   tx: Transaction;
   onDelete?: () => void;
+  appearance?: "home";
 }) {
   const config = getCategoryConfig(tx.category);
   const isIncome = tx.type === "INCOME";
 
+  const date = new Date(tx.date);
   const row = (
     <View
-      className="flex-row items-center bg-white rounded-2xl border border-[#E8E6DF] pl-3 pr-3.5 py-4"
-      style={{ borderLeftWidth: 3, borderLeftColor: config.color }}
+      className={
+        appearance === "home"
+          ? "flex-row items-center gap-2 rounded-xl bg-fynlo-border p-3"
+          : "min-h-20 flex-row items-center gap-3 border-b border-fynlo-border bg-fynlo-canvas py-2 px-1"
+      }
     >
-      <View
-        className="w-10 h-10 rounded-full items-center justify-center mr-3"
-        style={{ backgroundColor: `${config.color}22` }}
-      >
-        <Text className="text-lg">{config.icon}</Text>
+      <View className="h-11 w-11 items-center justify-center rounded-lg bg-fynlo-surface">
+        <Text className="text-xl">{config.icon}</Text>
       </View>
-
       <View className="flex-1">
-        <Text className="text-brand-bg text-sm font-medium" numberOfLines={1}>
+        <Text
+          numberOfLines={1}
+          className="font-poppins-medium text-fynlo-label text-fynlo-text-primary"
+        >
           {tx.description || config.label}
         </Text>
-        <View className="flex-row items-center gap-1.5 mt-0.5">
-          <Feather
-            name={INPUT_METHOD_ICON[tx.input_method]}
-            size={11}
-            color="#8A8D96"
-          />
-          <View
-            className="px-1.5 py-0.5 rounded-full"
-            style={{ backgroundColor: `${config.color}1A` }}
-          >
-            <Text
-              className="text-[10px] font-medium"
-              style={{ color: config.color }}
-            >
-              {config.label}
-            </Text>
-          </View>
-          {tx.is_flagged && (
-            <View className="flex-row items-center gap-1 ml-1">
-              <Feather name="alert-triangle" size={11} color="#FF6B4A" />
-              <Text className="text-brand-coral text-[11px]">Flagged</Text>
-            </View>
-          )}
-        </View>
+        <Text className="mt-1 font-poppins-regular text-fynlo-caption text-fynlo-text-secondary">
+          {tx.description && tx.description !== config.label
+            ? `${config.label} · `
+            : ""}
+          {date.toLocaleDateString("en-IN", {
+            day: "numeric",
+            month: "short",
+            year: appearance === "home" ? undefined : "numeric",
+          })}
+        </Text>
+        {tx.is_flagged && <Text className="text-fynlo-error">Flagged</Text>}
       </View>
-
-      <Text
-        className={`text-sm font-medium ${
-          isIncome ? "text-brand-success" : "text-brand-coral"
-        }`}
-      >
-        {isIncome ? "+" : "-"}
-        {formatPrice(tx.amount)}
-      </Text>
+      <View style={{ maxWidth: "42%" }} className="items-end">
+        <Text
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          className={`font-poppins-medium text-fynlo-label ${isIncome ? "text-fynlo-primary" : "text-fynlo-expense"}`}
+        >
+          {isIncome ? "+" : "−"}
+          {formatPrice(tx.amount)}
+        </Text>
+        <Text className="mt-1 font-poppins-regular text-fynlo-caption text-fynlo-text-secondary">
+          {isIncome ? "Received" : "Spent"}
+        </Text>
+      </View>
     </View>
   );
-
-  if (!onDelete) {
-    return <View className="mb-2.5">{row}</View>;
-  }
-
+  if (!onDelete) return row;
   return (
-    <View className="mb-2.5">
-      <Swipeable
-        overshootRight={false}
-        renderRightActions={() => (
+    <Swipeable
+      overshootRight={false}
+      renderRightActions={() => (
+        <View className="w-16 items-center justify-center border-b border-fynlo-border">
           <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Delete transaction"
             onPress={onDelete}
-            className="bg-brand-coral rounded-2xl ml-2 w-16 items-center justify-center"
+            className="h-12 w-12 items-center justify-center rounded-full bg-fynlo-surface"
           >
-            <Feather name="trash-2" size={18} color="#fff" />
+            <Feather name="trash-2" size={20} color={colors.expense} />
           </TouchableOpacity>
-        )}
+        </View>
+      )}
+    >
+      <View
+        accessible
+        accessibilityActions={[{ name: "delete", label: "Delete transaction" }]}
+        onAccessibilityAction={({ nativeEvent }) => {
+          if (nativeEvent.actionName === "delete") onDelete();
+        }}
       >
         {row}
-      </Swipeable>
-    </View>
+      </View>
+    </Swipeable>
   );
 }
