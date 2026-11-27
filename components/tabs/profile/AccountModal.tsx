@@ -112,34 +112,44 @@ export default function AccountModal({
 
   return (
     <FormSheetModal
+      dark
       visible={visible}
       title={isEditing ? "Edit account" : "Add account"}
       onClose={onClose}
     >
-      <Text className="text-brand-bg text-xs font-medium mb-1.5">Name</Text>
+      <Text className="font-poppins-medium text-fynlo-label text-fynlo-text-secondary mb-1.5">
+        Name
+      </Text>
       <TextInput
+        accessibilityLabel="Account name"
         value={name}
         onChangeText={setName}
         placeholder="e.g. HDFC Savings"
         placeholderTextColor={COLORS.placeholder}
-        className="bg-white border border-[#E8E6DF] rounded-xl px-4 py-3.5 text-sm text-brand-bg mb-5"
+        className="bg-fynlo-canvas border border-fynlo-border rounded-xl px-4 py-3.5 font-poppins-regular text-fynlo-label text-fynlo-text-primary mb-5"
       />
 
-      <Text className="text-brand-bg text-xs font-medium mb-1.5">Type</Text>
+      <Text className="font-poppins-medium text-fynlo-label text-fynlo-text-secondary mb-1.5">
+        Type
+      </Text>
       <View className="flex-row flex-wrap gap-2 mb-5">
         {ACCOUNT_TYPES.map((t) => (
           <TouchableOpacity
             key={t}
+            accessibilityRole="button"
+            accessibilityState={{ selected: type === t }}
             onPress={() => setType(t)}
             className={`px-3.5 py-2 rounded-full border ${
               type === t
-                ? "bg-brand-bg border-brand-bg"
-                : "bg-white border-[#E8E6DF]"
+                ? "bg-fynlo-primary border-fynlo-primary"
+                : "bg-fynlo-canvas border-fynlo-border"
             }`}
           >
             <Text
               className={`text-xs font-medium ${
-                type === t ? "text-white" : "text-brand-bg"
+                type === t
+                  ? "text-fynlo-on-primary"
+                  : "text-fynlo-text-secondary"
               }`}
             >
               {ACCOUNT_TYPE_LABEL[t]}
@@ -149,23 +159,23 @@ export default function AccountModal({
       </View>
 
       {error ? (
-        <Text className="text-brand-coral text-xs mb-3">{error}</Text>
+        <Text className="text-fynlo-expense text-xs mb-3">{error}</Text>
       ) : null}
 
       <TouchableOpacity
         onPress={handleSave}
         disabled={saving}
-        className="bg-brand-bg rounded-xl py-4 items-center mb-3"
+        className="bg-fynlo-primary rounded-full py-4 items-center mb-3"
         activeOpacity={0.85}
       >
-        <Text className="text-white text-sm font-semibold">
+        <Text className="font-poppins-semibold text-fynlo-body text-fynlo-on-primary">
           {saving ? "Saving…" : isEditing ? "Save changes" : "Add account"}
         </Text>
       </TouchableOpacity>
 
       {isEditing && !account.is_default && (
         <TouchableOpacity onPress={onMadeDefault} className="py-3 items-center">
-          <Text className="text-brand-blue text-sm font-medium">
+          <Text className="text-fynlo-primary text-sm font-medium">
             Make default
           </Text>
         </TouchableOpacity>
@@ -173,7 +183,7 @@ export default function AccountModal({
 
       {isEditing && (
         <TouchableOpacity onPress={handleDelete} className="py-3 items-center">
-          <Text className="text-brand-coral text-sm font-medium">
+          <Text className="text-fynlo-expense text-sm font-medium">
             Delete account
           </Text>
         </TouchableOpacity>
